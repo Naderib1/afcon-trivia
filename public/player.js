@@ -1,4 +1,4 @@
-// AFCON Trivia - Player Client with i18n
+// AFCON Trivia - Player Client with i18n and Multi-Game Support
 const socket = io({
     transports: ['polling', 'websocket'],
     upgrade: true,
@@ -9,9 +9,14 @@ const socket = io({
     timeout: 20000
 });
 
+// Get game ID from URL (default to 1)
+const urlParams = new URLSearchParams(window.location.search);
+const gameId = parseInt(urlParams.get('game')) || 1;
+console.log('🎮 Joining Game:', gameId);
+
 // Connection status
 socket.on('connect', () => {
-    console.log('✅ Connected to server:', socket.id);
+    console.log('✅ Connected to server:', socket.id, '| Game:', gameId);
 });
 
 socket.on('connect_error', (error) => {
@@ -471,7 +476,7 @@ elements.joinForm.addEventListener('submit', (e) => {
         elements.badgePhoto.innerHTML = `<span>${name.charAt(0).toUpperCase()}</span>`;
     }
     
-    socket.emit('join-game', { name, lang: currentLang, photo: playerState.photo });
+    socket.emit('join-game', { name, lang: currentLang, photo: playerState.photo, gameId });
     showScreen('waiting');
 });
 

@@ -1,4 +1,4 @@
-// AFCON Trivia - Admin Client with Question Editor
+// AFCON Trivia - Admin Client with Multi-Game Support
 const socket = io({
     transports: ['polling', 'websocket'],
     upgrade: true,
@@ -8,6 +8,9 @@ const socket = io({
     reconnectionDelay: 1000,
     timeout: 20000
 });
+
+// Current selected game
+let currentGameId = 1;
 
 // Connection status
 socket.on('connect_error', (error) => {
@@ -30,8 +33,7 @@ const elements = {
     btnReset: document.getElementById('btn-reset'),
     answerCount: document.getElementById('answer-count'),
     answerTotal: document.getElementById('answer-total'),
-    qrCode: document.getElementById('qr-code'),
-    qrUrl: document.getElementById('qr-url'),
+    qrGrid: document.getElementById('qr-grid'),
     currentQuestionCard: document.getElementById('current-question-card'),
     adminLeaderboard: document.getElementById('admin-leaderboard'),
     questionsList: document.getElementById('questions-list'),
@@ -50,11 +52,13 @@ const elements = {
     qExplanationAr: document.getElementById('q-explanation-ar'),
     qExplanationFr: document.getElementById('q-explanation-fr'),
     winnersDownload: document.getElementById('winners-download'),
-    btnDownloadWinners: document.getElementById('btn-download-winners')
+    btnDownloadWinners: document.getElementById('btn-download-winners'),
+    gameButtons: document.querySelectorAll('.game-btn')
 };
 
 // Game State
 let adminState = {
+    gameId: 1,
     status: 'waiting',
     currentQuestion: -1,
     totalQuestions: 10,
@@ -158,18 +162,120 @@ function updateLeaderboard(leaderboard) {
     }).join('');
 }
 
-// Load QR Code
-function loadQRCode() {
-    fetch('/qr')
+// Load all QR Codes
+function loadAllQRCodes() {
+    fetch('/qr/all')
         .then(res => res.json())
         .then(data => {
-            elements.qrCode.innerHTML = `<img src="${data.qrCode}" alt="QR Code">`;
-            elements.qrUrl.textContent = data.url;
+            elements.qrGrid.innerHTML = data.qrCodes.map(qr => `
+                <div class="qr-card ${qr.gameId === currentGameId ? 'active' : ''}" data-game="${qr.gameId}">
+                    <div class="qr-card-header">
+                        <span class="qr-game-label">Game ${qr.gameId}</span>
+                    </div>
+                    <div class="qr-card-body" onclick="downloadQR(${qr.gameId})">
+                        <img src="${qr.qrCode}" alt="Game ${qr.gameId} QR" class="qr-image">
+                    </div>
+                    <div class="qr-card-footer">
+                        <p class="qr-url-small">${qr.url}</p>
+                        <button class="btn-download-qr" onclick="downloadQR(${qr.gameId})">
+                            📥 Download QR
+                        </button>
+                    </div>
+                </div>
+            `).join('');
         })
         .catch(err => {
-            elements.qrCode.innerHTML = '<div class="qr-loading">Failed to load QR</div>';
+            elements.qrGrid.innerHTML = '<div class="qr-loading">Failed to load QR codes</div>';
             console.error('QR Error:', err);
         });
+}
+
+// Download QR code as image
+async function downloadQR(gameId) {
+    try {
+        const response = await fetch(`/qr?game=${gameId}`);
+        const data = await response.json();
+        
+        // Create a canvas to add branding
+        const canvas = document.createElement('canvas');
+        canvas.width = 800;
+        canvas.height = 1000;
+        const ctx = canvas.getContext('2d');
+        
+        // Background
+        ctx.fillStyle = '#B22222';
+        ctx.fillRect(0, 0, 800, 1000);
+        
+        // White card area
+        ctx.fillStyle = '#FFFFFF';
+        ctx.roundRect(50, 50, 700, 900, 30);
+        ctx.fill();
+        
+        // Title
+        ctx.fillStyle = '#B22222';
+        ctx.font = 'bold 48px Poppins, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('AFCON TRIVIA', 400, 130);
+        
+        // Game number
+        ctx.fillStyle = '#FFD700';
+        ctx.font = 'bold 72px Poppins, sans-serif';
+        ctx.fillText(`GAME ${gameId}`, 400, 220);
+        
+        // QR Code
+        const img = new Image();
+        await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+            img.src = data.qrCode;
+        });
+        ctx.drawImage(img, 150, 280, 500, 500);
+        
+        // URL
+        ctx.fillStyle = '#333333';
+        ctx.font = '24px Poppins, sans-serif';
+        ctx.fillText('Scan to Play!', 400, 850);
+        
+        ctx.fillStyle = '#666666';
+        ctx.font = '18px Poppins, sans-serif';
+        ctx.fillText(data.url, 400, 890);
+        
+        // Footer
+        ctx.fillStyle = '#B22222';
+        ctx.font = '16px Poppins, sans-serif';
+        ctx.fillText('AFRICA CUP OF NATIONS - MOROCCO 2025', 400, 930);
+        
+        // Download
+        const link = document.createElement('a');
+        link.download = `AFCON_Trivia_Game_${gameId}_QR.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        
+    } catch (err) {
+        console.error('Failed to download QR:', err);
+        alert('Failed to download QR code');
+    }
+}
+
+// Make downloadQR global
+window.downloadQR = downloadQR;
+
+// Switch game
+function switchGame(gameId) {
+    currentGameId = gameId;
+    
+    // Update button states
+    elements.gameButtons.forEach(btn => {
+        btn.classList.toggle('active', parseInt(btn.dataset.game) === gameId);
+    });
+    
+    // Update QR card highlights
+    document.querySelectorAll('.qr-card').forEach(card => {
+        card.classList.toggle('active', parseInt(card.dataset.game) === gameId);
+    });
+    
+    // Tell server we switched games
+    socket.emit('admin-switch-game', { gameId });
 }
 
 // Render questions list
@@ -463,14 +569,25 @@ elements.questionModal.addEventListener('click', (e) => {
     }
 });
 
+// Game button click handlers
+elements.gameButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+        const gameId = parseInt(btn.dataset.game);
+        switchGame(gameId);
+    });
+});
+
 // Socket Events - Admin connect
 socket.on('connect', () => {
     console.log('✅ Admin fully connected, initializing...');
-    socket.emit('admin-connect');
-    loadQRCode();
+    socket.emit('admin-connect', { gameId: currentGameId });
+    loadAllQRCodes();
 });
 
 socket.on('admin-update', (data) => {
+    // Only update if it's for our current game
+    if (data.gameId && data.gameId !== currentGameId) return;
+    
     adminState.status = data.status;
     adminState.currentQuestion = data.currentQuestion;
     adminState.totalQuestions = data.totalQuestions;
@@ -520,4 +637,4 @@ socket.on('disconnect', () => {
 });
 
 // Initialize
-loadQRCode();
+loadAllQRCodes();

@@ -8,7 +8,7 @@ const fs = require('fs');
 const app = express();
 const server = http.createServer(app);
 
-// Configure Socket.io for production (handles various hosting environments)
+// Configure Socket.io for production
 const io = new Server(server, {
     cors: {
         origin: "*",
@@ -23,11 +23,6 @@ const io = new Server(server, {
 
 // Trust proxy for platforms like Render, Railway, Heroku
 app.set('trust proxy', 1);
-
-// Health check endpoint for Railway
-app.get('/health', (req, res) => {
-    res.status(200).json({ status: 'ok', players: gameState.players.size });
-});
 
 // Questions file path
 const QUESTIONS_FILE = './questions.json';
@@ -53,35 +48,53 @@ let questions = loadQuestions();
 // Serve static files
 app.use(express.static('public'));
 
-// Game state
-let gameState = {
-    status: 'waiting', // waiting, question, answer, finished
-    currentQuestion: -1,
-    players: new Map(),
-    questionStartTime: null,
-    questionDuration: 60, // seconds
-    timeRemaining: 60,
-    answers: new Map(), // Store answers for current question
-};
+// ============================================
+// MULTI-GAME SUPPORT - 4 separate games
+// ============================================
+const GAME_IDS = [1, 2, 3, 4];
+const games = {};
+const gameTimers = {};
+const gameAdmins = {}; // Track admin sockets per game
+
+// Initialize all 4 games
+GAME_IDS.forEach(gameId => {
+    games[gameId] = {
+        status: 'waiting',
+        currentQuestion: -1,
+        players: new Map(),
+        questionStartTime: null,
+        questionDuration: 60,
+        timeRemaining: 60,
+        answers: new Map()
+    };
+    gameTimers[gameId] = null;
+    gameAdmins[gameId] = new Set();
+});
+
+// Get game state
+function getGame(gameId) {
+    return games[gameId] || games[1];
+}
 
 // Reset game
-function resetGame() {
-    gameState.status = 'waiting';
-    gameState.currentQuestion = -1;
-    gameState.questionStartTime = null;
-    gameState.timeRemaining = gameState.questionDuration;
-    gameState.answers.clear();
+function resetGame(gameId) {
+    const game = getGame(gameId);
+    game.status = 'waiting';
+    game.currentQuestion = -1;
+    game.questionStartTime = null;
+    game.timeRemaining = game.questionDuration;
+    game.answers.clear();
     
-    // Reset player scores but keep players
-    gameState.players.forEach((player, id) => {
+    game.players.forEach((player) => {
         player.score = 0;
         player.answers = [];
     });
 }
 
-// Get leaderboard
-function getLeaderboard() {
-    const players = Array.from(gameState.players.values())
+// Get leaderboard for a game
+function getLeaderboard(gameId) {
+    const game = getGame(gameId);
+    return Array.from(game.players.values())
         .filter(p => p.name)
         .sort((a, b) => b.score - a.score)
         .slice(0, 10)
@@ -90,73 +103,71 @@ function getLeaderboard() {
             score: p.score,
             photo: p.photo || null
         }));
-    return players;
 }
 
-// Get current question (without correct answer for players)
-function getCurrentQuestionForPlayers() {
-    if (gameState.currentQuestion < 0 || gameState.currentQuestion >= questions.length) {
+// Get current question for players
+function getCurrentQuestionForPlayers(gameId) {
+    const game = getGame(gameId);
+    if (game.currentQuestion < 0 || game.currentQuestion >= questions.length) {
         return null;
     }
-    const q = questions[gameState.currentQuestion];
+    const q = questions[game.currentQuestion];
     return {
         id: q.id,
-        question: q.question, // Can be string or {en, ar, fr} object
+        question: q.question,
         options: q.options,
-        questionNumber: gameState.currentQuestion + 1,
+        questionNumber: game.currentQuestion + 1,
         totalQuestions: questions.length
     };
 }
 
-// Get current question (with correct answer for reveal)
-function getCurrentQuestionWithAnswer() {
-    if (gameState.currentQuestion < 0 || gameState.currentQuestion >= questions.length) {
+// Get current question with answer
+function getCurrentQuestionWithAnswer(gameId) {
+    const game = getGame(gameId);
+    if (game.currentQuestion < 0 || game.currentQuestion >= questions.length) {
         return null;
     }
-    return questions[gameState.currentQuestion];
+    return questions[game.currentQuestion];
 }
 
-// Timer interval
-let timerInterval = null;
-
-function startTimer() {
-    if (timerInterval) clearInterval(timerInterval);
+// Start timer for a game
+function startTimer(gameId) {
+    if (gameTimers[gameId]) clearInterval(gameTimers[gameId]);
     
-    gameState.questionStartTime = Date.now();
-    gameState.timeRemaining = gameState.questionDuration;
+    const game = getGame(gameId);
+    game.questionStartTime = Date.now();
+    game.timeRemaining = game.questionDuration;
     
-    timerInterval = setInterval(() => {
-        const elapsed = Math.floor((Date.now() - gameState.questionStartTime) / 1000);
-        gameState.timeRemaining = Math.max(0, gameState.questionDuration - elapsed);
+    gameTimers[gameId] = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - game.questionStartTime) / 1000);
+        game.timeRemaining = Math.max(0, game.questionDuration - elapsed);
         
-        io.emit('timer', { timeRemaining: gameState.timeRemaining });
+        // Emit timer only to players in this game
+        io.to(`game-${gameId}`).emit('timer', { timeRemaining: game.timeRemaining });
         
-        if (gameState.timeRemaining <= 0) {
-            clearInterval(timerInterval);
-            timerInterval = null;
-            revealAnswer();
+        if (game.timeRemaining <= 0) {
+            clearInterval(gameTimers[gameId]);
+            gameTimers[gameId] = null;
+            revealAnswer(gameId);
         }
     }, 1000);
 }
 
-function revealAnswer() {
-    gameState.status = 'answer';
-    const question = getCurrentQuestionWithAnswer();
+// Reveal answer for a game
+function revealAnswer(gameId) {
+    const game = getGame(gameId);
+    game.status = 'answer';
+    const question = getCurrentQuestionWithAnswer(gameId);
     
-    console.log('🎯 Revealing answer for question', gameState.currentQuestion + 1);
-    console.log(`📊 Players: ${gameState.players.size}, Answers: ${gameState.answers.size}`);
+    console.log(`🎯 [Game ${gameId}] Revealing answer for question ${game.currentQuestion + 1}`);
     
-    // Calculate results for each player
     const results = [];
-    gameState.players.forEach((player, socketId) => {
-        const playerAnswer = gameState.answers.get(socketId);
+    game.players.forEach((player, socketId) => {
+        const playerAnswer = game.answers.get(socketId);
         const isCorrect = playerAnswer !== undefined && playerAnswer === question.correct;
         
         if (isCorrect) {
             player.score += 10;
-            console.log(`✅ ${player.name} answered correctly! New score: ${player.score}`);
-        } else {
-            console.log(`❌ ${player.name} answered ${playerAnswer}, correct was ${question.correct}`);
         }
         
         player.answers.push({
@@ -170,21 +181,20 @@ function revealAnswer() {
             name: player.name,
             answer: playerAnswer,
             isCorrect,
-            score: player.score,
-            lang: player.lang || 'en'
+            score: player.score
         });
     });
     
-    io.emit('answer-reveal', {
+    // Emit to game room
+    io.to(`game-${gameId}`).emit('answer-reveal', {
         question: question,
         correctAnswer: question.correct,
         explanation: question.explanation,
-        leaderboard: getLeaderboard()
+        leaderboard: getLeaderboard(gameId)
     });
     
-    // Send individual results to each player
+    // Send individual results
     results.forEach(result => {
-        console.log(`📤 Sending result to ${result.name} (${result.socketId}): correct=${result.isCorrect}, score=${result.score}`);
         io.to(result.socketId).emit('your-result', {
             isCorrect: result.isCorrect,
             newScore: result.score,
@@ -192,18 +202,36 @@ function revealAnswer() {
         });
     });
     
-    // Notify admins
-    broadcastToAdmins('admin-update', {
-        status: gameState.status,
-        currentQuestion: gameState.currentQuestion,
-        totalQuestions: questions.length,
-        playerCount: gameState.players.size,
-        leaderboard: getLeaderboard(),
-        questions: questions
-    });
-    
-    console.log('📊 Leaderboard:', getLeaderboard());
+    // Notify admins of this game
+    broadcastToGameAdmins(gameId, 'admin-update', getAdminUpdate(gameId));
 }
+
+// Get admin update data
+function getAdminUpdate(gameId) {
+    const game = getGame(gameId);
+    return {
+        gameId: gameId,
+        status: game.status,
+        currentQuestion: game.currentQuestion,
+        totalQuestions: questions.length,
+        playerCount: game.players.size,
+        leaderboard: getLeaderboard(gameId),
+        questions: questions
+    };
+}
+
+// Broadcast to admins of a specific game
+function broadcastToGameAdmins(gameId, event, data) {
+    gameAdmins[gameId].forEach(socketId => {
+        io.to(socketId).emit(event, data);
+    });
+}
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+    const totalPlayers = GAME_IDS.reduce((sum, id) => sum + games[id].players.size, 0);
+    res.status(200).json({ status: 'ok', totalPlayers, games: GAME_IDS.length });
+});
 
 // Routes
 app.get('/', (req, res) => {
@@ -214,74 +242,116 @@ app.get('/admin', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
-// QR Code endpoint
+// QR Code endpoint - supports game parameter
 app.get('/qr', async (req, res) => {
     try {
-        // Determine the correct protocol (https for production, http for local)
+        const gameId = parseInt(req.query.game) || 1;
         const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
         const host = req.headers['x-forwarded-host'] || req.headers.host;
-        const url = `${protocol}://${host}/`;
+        const url = `${protocol}://${host}/?game=${gameId}`;
         
         const qrCode = await QRCode.toDataURL(url, {
-            width: 300,
+            width: 400,
             margin: 2,
             color: {
                 dark: '#8D0000',
                 light: '#ffffff'
             }
         });
-        res.json({ qrCode, url });
+        res.json({ qrCode, url, gameId });
     } catch (err) {
         res.status(500).json({ error: 'Failed to generate QR code' });
     }
 });
 
-// Track admin sockets
-let adminSockets = new Set();
+// Get all QR codes for admin
+app.get('/qr/all', async (req, res) => {
+    try {
+        const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+        const host = req.headers['x-forwarded-host'] || req.headers.host;
+        
+        const qrCodes = await Promise.all(GAME_IDS.map(async (gameId) => {
+            const url = `${protocol}://${host}/?game=${gameId}`;
+            const qrCode = await QRCode.toDataURL(url, {
+                width: 600,
+                margin: 3,
+                color: {
+                    dark: '#8D0000',
+                    light: '#ffffff'
+                }
+            });
+            return { gameId, qrCode, url };
+        }));
+        
+        res.json({ qrCodes });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to generate QR codes' });
+    }
+});
 
-// Broadcast to all admins
-function broadcastToAdmins(event, data) {
-    adminSockets.forEach(socketId => {
-        io.to(socketId).emit(event, data);
-    });
-    // Also emit to admins room as backup
-    io.to('admins').emit(event, data);
-}
-
-// Socket.io
+// Socket.io connection handling
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
+    let currentGameId = null;
+    let isAdmin = false;
     
-    // Check if this is an admin
-    socket.on('admin-connect', () => {
-        socket.join('admins');
-        adminSockets.add(socket.id);
-        console.log('✅ Admin connected:', socket.id, 'Total admins:', adminSockets.size);
+    // Admin connects and selects a game
+    socket.on('admin-connect', (data) => {
+        const gameId = data?.gameId || 1;
+        isAdmin = true;
         
-        socket.emit('admin-update', {
-            status: gameState.status,
-            currentQuestion: gameState.currentQuestion,
-            totalQuestions: questions.length,
-            playerCount: gameState.players.size,
-            leaderboard: getLeaderboard(),
-            questions: questions
-        });
+        // Remove from previous game admins if switching
+        if (currentGameId && gameAdmins[currentGameId]) {
+            gameAdmins[currentGameId].delete(socket.id);
+            socket.leave(`admin-game-${currentGameId}`);
+        }
+        
+        currentGameId = gameId;
+        socket.join(`admin-game-${gameId}`);
+        gameAdmins[gameId].add(socket.id);
+        
+        console.log(`✅ Admin connected to Game ${gameId}:`, socket.id);
+        
+        socket.emit('admin-update', getAdminUpdate(gameId));
     });
     
-    // Player joins
+    // Admin switches game
+    socket.on('admin-switch-game', (data) => {
+        const newGameId = data.gameId;
+        if (!GAME_IDS.includes(newGameId)) return;
+        
+        // Remove from old game
+        if (currentGameId && gameAdmins[currentGameId]) {
+            gameAdmins[currentGameId].delete(socket.id);
+            socket.leave(`admin-game-${currentGameId}`);
+        }
+        
+        currentGameId = newGameId;
+        socket.join(`admin-game-${newGameId}`);
+        gameAdmins[newGameId].add(socket.id);
+        
+        console.log(`🔄 Admin switched to Game ${newGameId}:`, socket.id);
+        
+        socket.emit('admin-update', getAdminUpdate(newGameId));
+    });
+    
+    // Player joins a game
     socket.on('join-game', (data) => {
+        const gameId = data.gameId || 1;
+        const game = getGame(gameId);
         const playerName = data.name.trim().substring(0, 20);
         const playerLang = data.lang || 'en';
         
-        // Limit photo size to prevent memory issues (max ~50KB base64)
+        // Limit photo size
         let playerPhoto = null;
         if (data.photo && data.photo.length < 70000) {
             playerPhoto = data.photo;
-        } else if (data.photo) {
-            console.log(`⚠️ Photo too large for ${playerName}: ${Math.round(data.photo.length / 1024)}KB - skipping`);
         }
         
-        gameState.players.set(socket.id, {
+        currentGameId = gameId;
+        socket.join(`game-${gameId}`);
+        
+        game.players.set(socket.id, {
             name: playerName,
             score: 0,
             answers: [],
@@ -290,138 +360,134 @@ io.on('connection', (socket) => {
             photo: playerPhoto
         });
         
-        console.log(`✅ Player joined: ${playerName} (${playerLang})${playerPhoto ? ' with photo' : ''} | Total: ${gameState.players.size}`);
+        console.log(`✅ [Game ${gameId}] Player joined: ${playerName} | Total: ${game.players.size}`);
         
-        // Send current state to player
         socket.emit('game-state', {
-            status: gameState.status,
-            question: gameState.status === 'question' ? getCurrentQuestionForPlayers() : null,
-            timeRemaining: gameState.timeRemaining,
+            gameId: gameId,
+            status: game.status,
+            question: game.status === 'question' ? getCurrentQuestionForPlayers(gameId) : null,
+            timeRemaining: game.timeRemaining,
             playerName: playerName,
             score: 0,
             totalQuestions: questions.length
         });
         
-        // Notify admins
-        const updateData = {
-            playerCount: gameState.players.size,
-            leaderboard: getLeaderboard()
-        };
-        broadcastToAdmins('player-joined', updateData);
-        console.log('📢 Broadcasted player-joined to admins:', updateData.playerCount, 'players');
+        // Notify admins of this game
+        broadcastToGameAdmins(gameId, 'player-joined', {
+            playerCount: game.players.size,
+            leaderboard: getLeaderboard(gameId)
+        });
     });
     
     // Player submits answer
     socket.on('submit-answer', (data) => {
-        if (gameState.status !== 'question') return;
-        if (gameState.answers.has(socket.id)) return;
+        if (!currentGameId) return;
+        const game = getGame(currentGameId);
         
-        gameState.answers.set(socket.id, data.answer);
-        console.log(`📝 Answer received from ${socket.id}: ${data.answer} | Total answers: ${gameState.answers.size}`);
+        if (game.status !== 'question') return;
+        if (game.answers.has(socket.id)) return;
+        
+        game.answers.set(socket.id, data.answer);
+        console.log(`📝 [Game ${currentGameId}] Answer from ${socket.id}: ${data.answer}`);
         
         socket.emit('answer-received', { answer: data.answer });
         
-        // Notify admin of answer count
-        broadcastToAdmins('answer-count', {
-            count: gameState.answers.size,
-            total: gameState.players.size
+        broadcastToGameAdmins(currentGameId, 'answer-count', {
+            count: game.answers.size,
+            total: game.players.size
         });
     });
     
     // Admin starts game
     socket.on('admin-start-game', () => {
-        console.log('🎮 Admin starting game...');
-        resetGame();
-        io.emit('game-started');
-        io.emit('game-state', { status: 'waiting', totalQuestions: questions.length });
+        if (!currentGameId) return;
+        console.log(`🎮 [Game ${currentGameId}] Admin starting game...`);
         
-        broadcastToAdmins('admin-update', {
-            status: 'waiting',
-            currentQuestion: -1,
+        resetGame(currentGameId);
+        
+        io.to(`game-${currentGameId}`).emit('game-started');
+        io.to(`game-${currentGameId}`).emit('game-state', { 
+            status: 'waiting', 
             totalQuestions: questions.length,
-            playerCount: gameState.players.size,
-            leaderboard: getLeaderboard(),
-            questions: questions
+            gameId: currentGameId
         });
+        
+        broadcastToGameAdmins(currentGameId, 'admin-update', getAdminUpdate(currentGameId));
     });
     
     // Admin shows next question
     socket.on('admin-next-question', () => {
-        console.log('⏭️ Admin showing next question...');
-        if (gameState.currentQuestion >= questions.length - 1) {
-            // Game finished
-            gameState.status = 'finished';
-            console.log('🏁 Game finished!');
-            io.emit('game-finished', {
-                leaderboard: getLeaderboard(),
+        if (!currentGameId) return;
+        const game = getGame(currentGameId);
+        
+        console.log(`⏭️ [Game ${currentGameId}] Admin showing next question...`);
+        
+        if (game.currentQuestion >= questions.length - 1) {
+            game.status = 'finished';
+            console.log(`🏁 [Game ${currentGameId}] Game finished!`);
+            
+            io.to(`game-${currentGameId}`).emit('game-finished', {
+                leaderboard: getLeaderboard(currentGameId),
                 totalQuestions: questions.length
             });
+            
+            broadcastToGameAdmins(currentGameId, 'admin-update', getAdminUpdate(currentGameId));
             return;
         }
         
-        gameState.currentQuestion++;
-        gameState.status = 'question';
-        gameState.answers.clear();
+        game.currentQuestion++;
+        game.status = 'question';
+        game.answers.clear();
         
-        const question = getCurrentQuestionForPlayers();
-        console.log(`❓ Question ${gameState.currentQuestion + 1}: Broadcasting to all players`);
+        const question = getCurrentQuestionForPlayers(currentGameId);
         
-        io.emit('new-question', {
+        io.to(`game-${currentGameId}`).emit('new-question', {
             question: question,
-            timeRemaining: gameState.questionDuration
+            timeRemaining: game.questionDuration
         });
         
-        startTimer();
+        startTimer(currentGameId);
         
-        broadcastToAdmins('admin-update', {
-            status: gameState.status,
-            currentQuestion: gameState.currentQuestion,
-            totalQuestions: questions.length,
-            playerCount: gameState.players.size,
-            leaderboard: getLeaderboard(),
-            questions: questions
-        });
-        
-        // Reset answer count for new question
-        broadcastToAdmins('answer-count', {
+        broadcastToGameAdmins(currentGameId, 'admin-update', getAdminUpdate(currentGameId));
+        broadcastToGameAdmins(currentGameId, 'answer-count', {
             count: 0,
-            total: gameState.players.size
+            total: game.players.size
         });
     });
     
     // Admin reveals answer early
     socket.on('admin-reveal-answer', () => {
-        console.log('👀 Admin revealing answer early...');
-        if (gameState.status !== 'question') return;
-        if (timerInterval) {
-            clearInterval(timerInterval);
-            timerInterval = null;
+        if (!currentGameId) return;
+        const game = getGame(currentGameId);
+        
+        if (game.status !== 'question') return;
+        
+        if (gameTimers[currentGameId]) {
+            clearInterval(gameTimers[currentGameId]);
+            gameTimers[currentGameId] = null;
         }
-        revealAnswer();
+        
+        revealAnswer(currentGameId);
     });
     
     // Admin resets game
     socket.on('admin-reset-game', () => {
-        console.log('🔄 Admin resetting game...');
-        if (timerInterval) {
-            clearInterval(timerInterval);
-            timerInterval = null;
+        if (!currentGameId) return;
+        
+        console.log(`🔄 [Game ${currentGameId}] Admin resetting game...`);
+        
+        if (gameTimers[currentGameId]) {
+            clearInterval(gameTimers[currentGameId]);
+            gameTimers[currentGameId] = null;
         }
-        resetGame();
         
-        io.emit('game-reset');
+        resetGame(currentGameId);
         
-        broadcastToAdmins('admin-update', {
-            status: gameState.status,
-            currentQuestion: gameState.currentQuestion,
-            totalQuestions: questions.length,
-            playerCount: gameState.players.size,
-            leaderboard: getLeaderboard(),
-            questions: questions
-        });
+        io.to(`game-${currentGameId}`).emit('game-reset');
+        broadcastToGameAdmins(currentGameId, 'admin-update', getAdminUpdate(currentGameId));
     });
     
-    // Admin adds question
+    // Admin adds question (shared across all games)
     socket.on('admin-add-question', (data) => {
         const newQuestion = {
             id: Date.now(),
@@ -430,31 +496,25 @@ io.on('connection', (socket) => {
         questions.push(newQuestion);
         saveQuestions(questions);
         
-        broadcastToAdmins('questions-updated', { questions });
-        broadcastToAdmins('admin-update', {
-            status: gameState.status,
-            currentQuestion: gameState.currentQuestion,
-            totalQuestions: questions.length,
-            playerCount: gameState.players.size,
-            leaderboard: getLeaderboard(),
-            questions: questions
+        // Notify all admins
+        GAME_IDS.forEach(gameId => {
+            broadcastToGameAdmins(gameId, 'questions-updated', { questions });
+            broadcastToGameAdmins(gameId, 'admin-update', getAdminUpdate(gameId));
         });
         
-        console.log('Question added. Total questions:', questions.length);
+        console.log('Question added. Total:', questions.length);
     });
     
     // Admin updates question
     socket.on('admin-update-question', (data) => {
         const { index, question } = data;
         if (index >= 0 && index < questions.length) {
-            questions[index] = {
-                id: questions[index].id,
-                ...question
-            };
+            questions[index] = { id: questions[index].id, ...question };
             saveQuestions(questions);
             
-            broadcastToAdmins('questions-updated', { questions });
-            console.log('Question updated at index:', index);
+            GAME_IDS.forEach(gameId => {
+                broadcastToGameAdmins(gameId, 'questions-updated', { questions });
+            });
         }
     });
     
@@ -465,47 +525,45 @@ io.on('connection', (socket) => {
             questions.splice(index, 1);
             saveQuestions(questions);
             
-            broadcastToAdmins('questions-updated', { questions });
-            broadcastToAdmins('admin-update', {
-                status: gameState.status,
-                currentQuestion: gameState.currentQuestion,
-                totalQuestions: questions.length,
-                playerCount: gameState.players.size,
-                leaderboard: getLeaderboard(),
-                questions: questions
+            GAME_IDS.forEach(gameId => {
+                broadcastToGameAdmins(gameId, 'questions-updated', { questions });
+                broadcastToGameAdmins(gameId, 'admin-update', getAdminUpdate(gameId));
             });
-            
-            console.log('Question deleted. Total questions:', questions.length);
         }
     });
     
     // Handle disconnect
     socket.on('disconnect', () => {
-        // Check if admin disconnected
-        if (adminSockets.has(socket.id)) {
-            adminSockets.delete(socket.id);
-            console.log('❌ Admin disconnected:', socket.id, 'Remaining admins:', adminSockets.size);
+        if (isAdmin && currentGameId && gameAdmins[currentGameId]) {
+            gameAdmins[currentGameId].delete(socket.id);
+            console.log(`❌ Admin disconnected from Game ${currentGameId}`);
         }
         
-        const player = gameState.players.get(socket.id);
-        if (player) {
-            console.log(`❌ Player disconnected: ${player.name} | Remaining: ${gameState.players.size - 1}`);
+        if (currentGameId && !isAdmin) {
+            const game = getGame(currentGameId);
+            const player = game.players.get(socket.id);
+            
+            if (player) {
+                console.log(`❌ [Game ${currentGameId}] Player left: ${player.name}`);
+            }
+            
+            game.players.delete(socket.id);
+            game.answers.delete(socket.id);
+            
+            broadcastToGameAdmins(currentGameId, 'player-left', {
+                playerCount: game.players.size,
+                leaderboard: getLeaderboard(currentGameId)
+            });
         }
-        gameState.players.delete(socket.id);
-        gameState.answers.delete(socket.id);
-        
-        broadcastToAdmins('player-left', {
-            playerCount: gameState.players.size,
-            leaderboard: getLeaderboard()
-        });
     });
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`\n🏆 AFCON Trivia Server running!`);
-    console.log(`\n📱 Player URL: http://localhost:${PORT}`);
+    console.log(`\n📱 Player URL: http://localhost:${PORT}/?game=1`);
     console.log(`🎮 Admin Panel: http://localhost:${PORT}/admin`);
     console.log(`📝 Questions loaded: ${questions.length}`);
-    console.log(`\n✨ Ready for the game!\n`);
+    console.log(`🎯 Games available: ${GAME_IDS.join(', ')}`);
+    console.log(`\n✨ Ready for the games!\n`);
 });

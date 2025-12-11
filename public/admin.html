@@ -20,6 +20,15 @@
                     <span class="admin-badge">ADMIN CONTROL</span>
                 </div>
             </div>
+            <div class="game-selector">
+                <span class="selector-label">Select Game:</span>
+                <div class="game-buttons">
+                    <button class="game-btn active" data-game="1">Game 1</button>
+                    <button class="game-btn" data-game="2">Game 2</button>
+                    <button class="game-btn" data-game="3">Game 3</button>
+                    <button class="game-btn" data-game="4">Game 4</button>
+                </div>
+            </div>
             <div class="status-bar">
                 <div class="status-item">
                     <span class="status-label">Status</span>
@@ -64,15 +73,12 @@
                 </div>
             </section>
 
-            <section class="qr-section">
-                <h2>📱 QR Code for Players</h2>
-                <div class="qr-container">
-                    <img src="images/logo.png" alt="AFCON" class="qr-logo">
-                    <div id="qr-code" class="qr-code">
-                        <div class="qr-loading">Loading QR...</div>
-                    </div>
-                    <p class="qr-url" id="qr-url">Loading...</p>
-                    <p class="qr-hint">Players scan this to join!</p>
+            <section class="qr-section qr-section-full">
+                <h2>📱 QR Codes for All Games</h2>
+                <p class="qr-section-hint">Click any QR code to download it for the stadium screen</p>
+                <div class="qr-grid" id="qr-grid">
+                    <!-- QR codes will be loaded here -->
+                    <div class="qr-loading">Loading QR Codes...</div>
                 </div>
             </section>
 
