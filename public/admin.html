@@ -73,15 +73,6 @@
                 </div>
             </section>
 
-            <section class="qr-section qr-section-full">
-                <h2>📱 QR Codes for All Games</h2>
-                <p class="qr-section-hint">Click any QR code to download it for the stadium screen</p>
-                <div class="qr-grid" id="qr-grid">
-                    <!-- QR codes will be loaded here -->
-                    <div class="qr-loading">Loading QR Codes...</div>
-                </div>
-            </section>
-
             <section class="current-question-section" id="current-question-section">
                 <h2>❓ Current Question</h2>
                 <div class="current-question-card" id="current-question-card">
@@ -99,21 +90,34 @@
                 <div class="winners-download" id="winners-download" style="display: none;">
                     <button class="btn-download-winners" id="btn-download-winners">
                         <span>📸</span>
-                        <span>Download Top 3 Winners</span>
+                        <span>Download Winners (1920x1080)</span>
                     </button>
                 </div>
             </section>
 
             <section class="questions-section">
                 <div class="questions-header">
-                    <h2>📝 Questions Editor</h2>
-                    <button class="btn-add-question" id="btn-add-question">
-                        <span>➕</span>
-                        <span>Add Question</span>
-                    </button>
+                    <h2>📝 Questions Database</h2>
+                    <div class="questions-header-actions">
+                        <span class="active-count" id="active-count">0 Active</span>
+                        <button class="btn-add-question" id="btn-add-question">
+                            <span>➕</span>
+                            <span>Add Question</span>
+                        </button>
+                    </div>
                 </div>
+                <p class="questions-hint">Toggle questions ON/OFF to select which ones to use in today's game (max 10 recommended)</p>
                 <div class="questions-list" id="questions-list">
                     <!-- Questions will be loaded here -->
+                </div>
+            </section>
+
+            <section class="qr-section qr-section-full">
+                <h2>📱 QR Codes for Stadium Screens</h2>
+                <p class="qr-section-hint">Click any QR code to download (1920x1080) for stadium display</p>
+                <div class="qr-grid" id="qr-grid">
+                    <!-- QR codes will be loaded here -->
+                    <div class="qr-loading">Loading QR Codes...</div>
                 </div>
             </section>
         </main>

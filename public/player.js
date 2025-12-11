@@ -549,13 +549,30 @@ socket.on('your-result', (data) => {
 });
 
 socket.on('game-finished', (data) => {
-    elements.finalScore.textContent = playerState.score;
+    // Update leaderboard first
+    if (data.leaderboard) {
+        updateLeaderboard(data.leaderboard);
+    }
     if (data.totalQuestions) {
         elements.maxPossibleScore.textContent = data.totalQuestions * 10;
     }
-    updateLeaderboard(data.leaderboard);
-    createFullConfetti();
-    showScreen('final');
+    // Show final screen after a short delay to let result show
+    setTimeout(() => {
+        elements.finalScore.textContent = playerState.score;
+        createFullConfetti();
+        showScreen('final');
+    }, 2000);
+});
+
+// Receive individual final score
+socket.on('your-final-score', (data) => {
+    console.log('📊 Final score received:', data);
+    playerState.score = data.score;
+    elements.finalScore.textContent = data.score;
+    elements.gameScore.textContent = data.score;
+    if (data.maxScore) {
+        elements.maxPossibleScore.textContent = data.maxScore;
+    }
 });
 
 socket.on('game-reset', () => {

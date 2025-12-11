@@ -45,6 +45,11 @@ function saveQuestions(questions) {
 
 let questions = loadQuestions();
 
+// Get only active questions for gameplay
+function getActiveQuestions() {
+    return questions.filter(q => q.active === true);
+}
+
 // Serve static files
 app.use(express.static('public'));
 
@@ -105,29 +110,31 @@ function getLeaderboard(gameId) {
         }));
 }
 
-// Get current question for players
+// Get current question for players (uses only active questions)
 function getCurrentQuestionForPlayers(gameId) {
     const game = getGame(gameId);
-    if (game.currentQuestion < 0 || game.currentQuestion >= questions.length) {
+    const activeQuestions = getActiveQuestions();
+    if (game.currentQuestion < 0 || game.currentQuestion >= activeQuestions.length) {
         return null;
     }
-    const q = questions[game.currentQuestion];
+    const q = activeQuestions[game.currentQuestion];
     return {
         id: q.id,
         question: q.question,
         options: q.options,
         questionNumber: game.currentQuestion + 1,
-        totalQuestions: questions.length
+        totalQuestions: activeQuestions.length
     };
 }
 
-// Get current question with answer
+// Get current question with answer (uses only active questions)
 function getCurrentQuestionWithAnswer(gameId) {
     const game = getGame(gameId);
-    if (game.currentQuestion < 0 || game.currentQuestion >= questions.length) {
+    const activeQuestions = getActiveQuestions();
+    if (game.currentQuestion < 0 || game.currentQuestion >= activeQuestions.length) {
         return null;
     }
-    return questions[game.currentQuestion];
+    return activeQuestions[game.currentQuestion];
 }
 
 // Start timer for a game
@@ -209,14 +216,15 @@ function revealAnswer(gameId) {
 // Get admin update data
 function getAdminUpdate(gameId) {
     const game = getGame(gameId);
+    const activeQuestions = getActiveQuestions();
     return {
         gameId: gameId,
         status: game.status,
         currentQuestion: game.currentQuestion,
-        totalQuestions: questions.length,
+        totalQuestions: activeQuestions.length,
         playerCount: game.players.size,
         leaderboard: getLeaderboard(gameId),
-        questions: questions
+        questions: questions // All questions for the editor
     };
 }
 
@@ -362,6 +370,7 @@ io.on('connection', (socket) => {
         
         console.log(`✅ [Game ${gameId}] Player joined: ${playerName} | Total: ${game.players.size}`);
         
+        const activeQuestions = getActiveQuestions();
         socket.emit('game-state', {
             gameId: gameId,
             status: game.status,
@@ -369,7 +378,7 @@ io.on('connection', (socket) => {
             timeRemaining: game.timeRemaining,
             playerName: playerName,
             score: 0,
-            totalQuestions: questions.length
+            totalQuestions: activeQuestions.length
         });
         
         // Notify admins of this game
@@ -401,14 +410,20 @@ io.on('connection', (socket) => {
     // Admin starts game
     socket.on('admin-start-game', () => {
         if (!currentGameId) return;
-        console.log(`🎮 [Game ${currentGameId}] Admin starting game...`);
+        const activeQuestions = getActiveQuestions();
+        console.log(`🎮 [Game ${currentGameId}] Admin starting game with ${activeQuestions.length} active questions...`);
+        
+        if (activeQuestions.length === 0) {
+            socket.emit('error', { message: 'No active questions! Please activate some questions first.' });
+            return;
+        }
         
         resetGame(currentGameId);
         
         io.to(`game-${currentGameId}`).emit('game-started');
         io.to(`game-${currentGameId}`).emit('game-state', { 
             status: 'waiting', 
-            totalQuestions: questions.length,
+            totalQuestions: activeQuestions.length,
             gameId: currentGameId
         });
         
@@ -419,16 +434,27 @@ io.on('connection', (socket) => {
     socket.on('admin-next-question', () => {
         if (!currentGameId) return;
         const game = getGame(currentGameId);
+        const activeQuestions = getActiveQuestions();
         
-        console.log(`⏭️ [Game ${currentGameId}] Admin showing next question...`);
+        console.log(`⏭️ [Game ${currentGameId}] Admin showing next question... (${game.currentQuestion + 1}/${activeQuestions.length})`);
         
-        if (game.currentQuestion >= questions.length - 1) {
+        if (game.currentQuestion >= activeQuestions.length - 1) {
             game.status = 'finished';
             console.log(`🏁 [Game ${currentGameId}] Game finished!`);
             
+            // Send game-finished with leaderboard to all players
             io.to(`game-${currentGameId}`).emit('game-finished', {
                 leaderboard: getLeaderboard(currentGameId),
-                totalQuestions: questions.length
+                totalQuestions: activeQuestions.length
+            });
+            
+            // Send individual final scores to each player
+            game.players.forEach((player, socketId) => {
+                io.to(socketId).emit('your-final-score', {
+                    score: player.score,
+                    totalQuestions: activeQuestions.length,
+                    maxScore: activeQuestions.length * 10
+                });
             });
             
             broadcastToGameAdmins(currentGameId, 'admin-update', getAdminUpdate(currentGameId));
@@ -524,6 +550,23 @@ io.on('connection', (socket) => {
         if (index >= 0 && index < questions.length) {
             questions.splice(index, 1);
             saveQuestions(questions);
+            
+            GAME_IDS.forEach(gameId => {
+                broadcastToGameAdmins(gameId, 'questions-updated', { questions });
+                broadcastToGameAdmins(gameId, 'admin-update', getAdminUpdate(gameId));
+            });
+        }
+    });
+    
+    // Admin toggles question active state
+    socket.on('admin-toggle-question', (data) => {
+        const { index } = data;
+        if (index >= 0 && index < questions.length) {
+            questions[index].active = !questions[index].active;
+            saveQuestions(questions);
+            
+            const activeCount = getActiveQuestions().length;
+            console.log(`🔄 Question ${index + 1} ${questions[index].active ? 'activated' : 'deactivated'}. Active questions: ${activeCount}`);
             
             GAME_IDS.forEach(gameId => {
                 broadcastToGameAdmins(gameId, 'questions-updated', { questions });

@@ -53,7 +53,8 @@ const elements = {
     qExplanationFr: document.getElementById('q-explanation-fr'),
     winnersDownload: document.getElementById('winners-download'),
     btnDownloadWinners: document.getElementById('btn-download-winners'),
-    gameButtons: document.querySelectorAll('.game-btn')
+    gameButtons: document.querySelectorAll('.game-btn'),
+    activeCount: document.getElementById('active-count')
 };
 
 // Game State
@@ -190,37 +191,54 @@ function loadAllQRCodes() {
         });
 }
 
-// Download QR code as image
+// Download QR code as image (1920x1080)
 async function downloadQR(gameId) {
     try {
         const response = await fetch(`/qr?game=${gameId}`);
         const data = await response.json();
         
-        // Create a canvas to add branding
+        // Create a canvas - 1920x1080 for stadium screens
         const canvas = document.createElement('canvas');
-        canvas.width = 800;
-        canvas.height = 1000;
+        canvas.width = 1920;
+        canvas.height = 1080;
         const ctx = canvas.getContext('2d');
         
-        // Background
-        ctx.fillStyle = '#B22222';
-        ctx.fillRect(0, 0, 800, 1000);
+        // Background gradient
+        const gradient = ctx.createLinearGradient(0, 0, 1920, 1080);
+        gradient.addColorStop(0, '#B22222');
+        gradient.addColorStop(1, '#8B0000');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 1920, 1080);
+        
+        // Decorative elements
+        ctx.fillStyle = 'rgba(255, 215, 0, 0.1)';
+        ctx.beginPath();
+        ctx.arc(1700, 200, 300, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(200, 900, 250, 0, Math.PI * 2);
+        ctx.fill();
         
         // White card area
         ctx.fillStyle = '#FFFFFF';
-        ctx.roundRect(50, 50, 700, 900, 30);
+        ctx.beginPath();
+        ctx.roundRect(560, 80, 800, 920, 40);
         ctx.fill();
         
         // Title
         ctx.fillStyle = '#B22222';
-        ctx.font = 'bold 48px Poppins, sans-serif';
+        ctx.font = 'bold 72px Arial, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('AFCON TRIVIA', 400, 130);
+        ctx.fillText('AFCON TRIVIA', 960, 180);
         
-        // Game number
+        // Game number with gold background
         ctx.fillStyle = '#FFD700';
-        ctx.font = 'bold 72px Poppins, sans-serif';
-        ctx.fillText(`GAME ${gameId}`, 400, 220);
+        ctx.beginPath();
+        ctx.roundRect(760, 200, 400, 90, 20);
+        ctx.fill();
+        ctx.fillStyle = '#8B0000';
+        ctx.font = 'bold 60px Arial, sans-serif';
+        ctx.fillText(`GAME ${gameId}`, 960, 268);
         
         // QR Code
         const img = new Image();
@@ -229,25 +247,24 @@ async function downloadQR(gameId) {
             img.onerror = reject;
             img.src = data.qrCode;
         });
-        ctx.drawImage(img, 150, 280, 500, 500);
+        ctx.drawImage(img, 610, 320, 700, 700);
         
-        // URL
-        ctx.fillStyle = '#333333';
-        ctx.font = '24px Poppins, sans-serif';
-        ctx.fillText('Scan to Play!', 400, 850);
-        
-        ctx.fillStyle = '#666666';
-        ctx.font = '18px Poppins, sans-serif';
-        ctx.fillText(data.url, 400, 890);
-        
-        // Footer
+        // Footer text
         ctx.fillStyle = '#B22222';
-        ctx.font = '16px Poppins, sans-serif';
-        ctx.fillText('AFRICA CUP OF NATIONS - MOROCCO 2025', 400, 930);
+        ctx.font = 'bold 36px Arial, sans-serif';
+        ctx.fillText('SCAN TO PLAY!', 960, 900);
+        
+        ctx.font = '24px Arial, sans-serif';
+        ctx.fillStyle = '#666666';
+        ctx.fillText(data.url, 960, 945);
+        
+        ctx.fillStyle = '#B22222';
+        ctx.font = '20px Arial, sans-serif';
+        ctx.fillText('AFRICA CUP OF NATIONS - MOROCCO 2025', 960, 985);
         
         // Download
         const link = document.createElement('a');
-        link.download = `AFCON_Trivia_Game_${gameId}_QR.png`;
+        link.download = `AFCON_Game_${gameId}_QR_1920x1080.png`;
         link.href = canvas.toDataURL('image/png');
         link.click();
         
@@ -278,10 +295,11 @@ function switchGame(gameId) {
     socket.emit('admin-switch-game', { gameId });
 }
 
-// Render questions list
+// Render questions list with activation toggles
 function renderQuestionsList() {
     if (!adminState.questions || adminState.questions.length === 0) {
         elements.questionsList.innerHTML = '<p class="empty-state">No questions yet. Add your first question!</p>';
+        updateActiveCount();
         return;
     }
     
@@ -289,10 +307,14 @@ function renderQuestionsList() {
     
     elements.questionsList.innerHTML = adminState.questions.map((q, index) => {
         const questionText = typeof q.question === 'object' ? q.question.en : q.question;
+        const isActive = q.active === true;
         
         return `
-            <div class="question-item" data-index="${index}">
+            <div class="question-item ${isActive ? 'active' : 'inactive'}" data-index="${index}">
                 <div class="question-item-header">
+                    <button class="btn-toggle ${isActive ? 'on' : 'off'}" onclick="toggleQuestion(${index})" title="${isActive ? 'Click to deactivate' : 'Click to activate'}">
+                        ${isActive ? '✅' : '⬜'}
+                    </button>
                     <span class="question-item-number">Q${index + 1}</span>
                     <span class="question-item-text">${questionText}</span>
                     <div class="question-item-actions">
@@ -308,6 +330,22 @@ function renderQuestionsList() {
             </div>
         `;
     }).join('');
+    
+    updateActiveCount();
+}
+
+// Update active questions count
+function updateActiveCount() {
+    const activeCount = adminState.questions.filter(q => q.active === true).length;
+    if (elements.activeCount) {
+        elements.activeCount.textContent = `${activeCount} Active`;
+        elements.activeCount.className = `active-count ${activeCount > 0 ? 'has-active' : ''}`;
+    }
+}
+
+// Toggle question active state
+function toggleQuestion(index) {
+    socket.emit('admin-toggle-question', { index });
 }
 
 // Open modal for adding question
@@ -412,7 +450,41 @@ function saveQuestion() {
     closeModal();
 }
 
-// Download top 3 winners as images
+// Helper to draw photo with proper aspect ratio (no stretch) and mirror fix
+async function drawPlayerPhoto(ctx, photo, x, y, size) {
+    if (!photo) return false;
+    
+    try {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+            img.src = photo;
+        });
+        
+        // Calculate crop to make it square (center crop)
+        const minDim = Math.min(img.width, img.height);
+        const sx = (img.width - minDim) / 2;
+        const sy = (img.height - minDim) / 2;
+        
+        // Save context and flip horizontally to fix selfie mirror
+        ctx.save();
+        ctx.translate(x + size, y);
+        ctx.scale(-1, 1);
+        
+        // Draw with proper aspect ratio
+        ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, size, size);
+        ctx.restore();
+        
+        return true;
+    } catch (e) {
+        console.error('Failed to load photo:', e);
+        return false;
+    }
+}
+
+// Download all 3 winners in ONE frame (1920x1080)
 async function downloadWinners() {
     const top3 = adminState.leaderboard.slice(0, 3);
     if (top3.length === 0) {
@@ -420,122 +492,134 @@ async function downloadWinners() {
         return;
     }
     
-    const medals = ['🥇', '🥈', '🥉'];
-    const ranks = ['1st', '2nd', '3rd'];
+    // Create canvas - 1920x1080 for stadium screens
+    const canvas = document.createElement('canvas');
+    canvas.width = 1920;
+    canvas.height = 1080;
+    const ctx = canvas.getContext('2d');
     
-    for (let i = 0; i < top3.length; i++) {
-        const player = top3[i];
+    // Background gradient
+    const gradient = ctx.createLinearGradient(0, 0, 1920, 1080);
+    gradient.addColorStop(0, '#B22222');
+    gradient.addColorStop(1, '#8B0000');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 1920, 1080);
+    
+    // Decorative gold circles
+    ctx.fillStyle = 'rgba(255, 215, 0, 0.15)';
+    ctx.beginPath();
+    ctx.arc(100, 150, 200, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(1820, 930, 200, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Gold accent bar at bottom
+    ctx.fillStyle = '#FFD700';
+    ctx.fillRect(0, 1020, 1920, 60);
+    
+    // Title
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 80px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('AFCON TRIVIA WINNERS', 960, 100);
+    
+    // Subtitle
+    ctx.font = '36px Arial, sans-serif';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.fillText('Top 3 Players', 960, 150);
+    
+    const medals = ['🥇', '🥈', '🥉'];
+    const ranks = ['1ST PLACE', '2ND PLACE', '3RD PLACE'];
+    const positions = [960, 400, 1520]; // Center, Left, Right (1st in center)
+    const photoSizes = [280, 200, 200]; // 1st place bigger
+    const yOffsets = [280, 350, 350]; // 1st place higher
+    
+    // Draw winners (1st in center, 2nd on left, 3rd on right)
+    const drawOrder = top3.length >= 2 ? [1, 0, 2] : [0]; // Draw 2nd, 1st, 3rd (1st on top)
+    
+    for (const orderIdx of drawOrder) {
+        if (orderIdx >= top3.length) continue;
         
-        // Create a canvas for the winner card
-        const canvas = document.createElement('canvas');
-        canvas.width = 800;
-        canvas.height = 500;
-        const ctx = canvas.getContext('2d');
+        const player = top3[orderIdx];
+        const x = positions[orderIdx];
+        const photoSize = photoSizes[orderIdx];
+        const y = yOffsets[orderIdx];
+        const photoRadius = photoSize / 2;
         
-        // Background gradient
-        const gradient = ctx.createLinearGradient(0, 0, 800, 500);
-        gradient.addColorStop(0, '#B22222');
-        gradient.addColorStop(1, '#8B0000');
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, 800, 500);
-        
-        // Gold accent bar
+        // Photo circle background
         ctx.fillStyle = '#FFD700';
-        ctx.fillRect(0, 450, 800, 50);
+        ctx.beginPath();
+        ctx.arc(x, y + photoRadius, photoRadius, 0, Math.PI * 2);
+        ctx.fill();
         
-        // Title
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = 'bold 36px Poppins, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('AFCON TRIVIA WINNER', 400, 50);
-        
-        // Medal/Rank
-        ctx.font = '60px sans-serif';
-        ctx.fillText(medals[i], 400, 120);
-        ctx.font = 'bold 28px Poppins, sans-serif';
-        ctx.fillText(ranks[i] + ' PLACE', 400, 160);
-        
-        // Player photo or circle with initial
+        // Draw player photo or initial
         ctx.save();
         ctx.beginPath();
-        ctx.arc(400, 260, 80, 0, Math.PI * 2);
-        ctx.closePath();
+        ctx.arc(x, y + photoRadius, photoRadius - 5, 0, Math.PI * 2);
         ctx.clip();
         
-        if (player.photo) {
-            try {
-                const img = new Image();
-                img.crossOrigin = 'anonymous';
-                await new Promise((resolve, reject) => {
-                    img.onload = resolve;
-                    img.onerror = reject;
-                    img.src = player.photo;
-                });
-                ctx.drawImage(img, 320, 180, 160, 160);
-            } catch (e) {
-                // Fallback to circle with initial
-                ctx.fillStyle = '#FFD700';
-                ctx.fill();
-                ctx.restore();
-                ctx.save();
-                ctx.fillStyle = '#B22222';
-                ctx.font = 'bold 60px Poppins, sans-serif';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(player.name.charAt(0).toUpperCase(), 400, 260);
-            }
-        } else {
+        const photoDrawn = await drawPlayerPhoto(ctx, player.photo, x - photoRadius + 5, y + 5, photoSize - 10);
+        
+        if (!photoDrawn) {
+            // Draw initial
             ctx.fillStyle = '#FFD700';
-            ctx.fill();
-            ctx.restore();
-            ctx.save();
+            ctx.fillRect(x - photoRadius, y, photoSize, photoSize);
             ctx.fillStyle = '#B22222';
-            ctx.font = 'bold 60px Poppins, sans-serif';
+            ctx.font = `bold ${photoSize * 0.5}px Arial, sans-serif`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(player.name.charAt(0).toUpperCase(), 400, 260);
+            ctx.fillText(player.name.charAt(0).toUpperCase(), x, y + photoRadius);
         }
         ctx.restore();
         
-        // Circle border
+        // Gold border
         ctx.strokeStyle = '#FFD700';
-        ctx.lineWidth = 6;
+        ctx.lineWidth = orderIdx === 0 ? 8 : 6;
         ctx.beginPath();
-        ctx.arc(400, 260, 80, 0, Math.PI * 2);
+        ctx.arc(x, y + photoRadius, photoRadius, 0, Math.PI * 2);
         ctx.stroke();
+        
+        // Medal emoji
+        ctx.font = orderIdx === 0 ? '80px Arial' : '60px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(medals[orderIdx], x, y - 20);
+        
+        // Rank text
+        ctx.fillStyle = '#FFD700';
+        ctx.font = orderIdx === 0 ? 'bold 36px Arial, sans-serif' : 'bold 28px Arial, sans-serif';
+        ctx.fillText(ranks[orderIdx], x, y + photoSize + 50);
         
         // Player name
         ctx.fillStyle = '#FFFFFF';
-        ctx.font = 'bold 40px Poppins, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(player.name, 400, 380);
+        ctx.font = orderIdx === 0 ? 'bold 52px Arial, sans-serif' : 'bold 40px Arial, sans-serif';
+        ctx.fillText(player.name, x, y + photoSize + 100);
         
         // Score
         ctx.fillStyle = '#FFD700';
-        ctx.font = 'bold 32px Poppins, sans-serif';
-        ctx.fillText(player.score + ' POINTS', 400, 425);
-        
-        // Footer text
-        ctx.fillStyle = '#B22222';
-        ctx.font = '16px Poppins, sans-serif';
-        ctx.fillText('AFRICA CUP OF NATIONS - MOROCCO 2025', 400, 480);
-        
-        // Download the image
-        const link = document.createElement('a');
-        link.download = `AFCON_Winner_${ranks[i].replace(' ', '_')}_${player.name.replace(/\s+/g, '_')}.png`;
-        link.href = canvas.toDataURL('image/png');
-        link.click();
-        
-        // Small delay between downloads
-        await new Promise(r => setTimeout(r, 500));
+        ctx.font = orderIdx === 0 ? 'bold 44px Arial, sans-serif' : 'bold 32px Arial, sans-serif';
+        ctx.fillText(player.score + ' POINTS', x, y + photoSize + 150);
     }
     
-    alert('✅ Downloaded ' + top3.length + ' winner cards!');
+    // Footer text on gold bar
+    ctx.fillStyle = '#8B0000';
+    ctx.font = 'bold 28px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('AFRICA CUP OF NATIONS - MOROCCO 2025', 960, 1058);
+    
+    // Download
+    const link = document.createElement('a');
+    link.download = `AFCON_Winners_1920x1080.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+    
+    alert('✅ Downloaded winners card!');
 }
 
 // Make functions global for onclick handlers
 window.editQuestion = editQuestion;
 window.deleteQuestion = deleteQuestion;
+window.toggleQuestion = toggleQuestion;
 
 // Button Event Listeners
 elements.btnStart.addEventListener('click', () => {
