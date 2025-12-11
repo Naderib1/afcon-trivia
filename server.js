@@ -143,6 +143,9 @@ function revealAnswer() {
     gameState.status = 'answer';
     const question = getCurrentQuestionWithAnswer();
     
+    console.log('🎯 Revealing answer for question', gameState.currentQuestion + 1);
+    console.log(`📊 Players: ${gameState.players.size}, Answers: ${gameState.answers.size}`);
+    
     // Calculate results for each player
     const results = [];
     gameState.players.forEach((player, socketId) => {
@@ -151,6 +154,9 @@ function revealAnswer() {
         
         if (isCorrect) {
             player.score += 10;
+            console.log(`✅ ${player.name} answered correctly! New score: ${player.score}`);
+        } else {
+            console.log(`❌ ${player.name} answered ${playerAnswer}, correct was ${question.correct}`);
         }
         
         player.answers.push({
@@ -178,6 +184,7 @@ function revealAnswer() {
     
     // Send individual results to each player
     results.forEach(result => {
+        console.log(`📤 Sending result to ${result.name} (${result.socketId}): correct=${result.isCorrect}, score=${result.score}`);
         io.to(result.socketId).emit('your-result', {
             isCorrect: result.isCorrect,
             newScore: result.score,
@@ -185,8 +192,8 @@ function revealAnswer() {
         });
     });
     
-    // Notify admin
-    io.emit('admin-update', {
+    // Notify admins
+    broadcastToAdmins('admin-update', {
         status: gameState.status,
         currentQuestion: gameState.currentQuestion,
         totalQuestions: questions.length,
@@ -194,6 +201,8 @@ function revealAnswer() {
         leaderboard: getLeaderboard(),
         questions: questions
     });
+    
+    console.log('📊 Leaderboard:', getLeaderboard());
 }
 
 // Routes
@@ -227,6 +236,18 @@ app.get('/qr', async (req, res) => {
     }
 });
 
+// Track admin sockets
+let adminSockets = new Set();
+
+// Broadcast to all admins
+function broadcastToAdmins(event, data) {
+    adminSockets.forEach(socketId => {
+        io.to(socketId).emit(event, data);
+    });
+    // Also emit to admins room as backup
+    io.to('admins').emit(event, data);
+}
+
 // Socket.io
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
@@ -234,6 +255,9 @@ io.on('connection', (socket) => {
     // Check if this is an admin
     socket.on('admin-connect', () => {
         socket.join('admins');
+        adminSockets.add(socket.id);
+        console.log('✅ Admin connected:', socket.id, 'Total admins:', adminSockets.size);
+        
         socket.emit('admin-update', {
             status: gameState.status,
             currentQuestion: gameState.currentQuestion,
@@ -259,7 +283,7 @@ io.on('connection', (socket) => {
             photo: playerPhoto
         });
         
-        console.log(`Player joined: ${playerName} (${playerLang})${playerPhoto ? ' with photo' : ''}`);
+        console.log(`✅ Player joined: ${playerName} (${playerLang})${playerPhoto ? ' with photo' : ''} | Total: ${gameState.players.size}`);
         
         // Send current state to player
         socket.emit('game-state', {
@@ -272,10 +296,12 @@ io.on('connection', (socket) => {
         });
         
         // Notify admins
-        io.to('admins').emit('player-joined', {
+        const updateData = {
             playerCount: gameState.players.size,
             leaderboard: getLeaderboard()
-        });
+        };
+        broadcastToAdmins('player-joined', updateData);
+        console.log('📢 Broadcasted player-joined to admins:', updateData.playerCount, 'players');
     });
     
     // Player submits answer
@@ -284,11 +310,12 @@ io.on('connection', (socket) => {
         if (gameState.answers.has(socket.id)) return;
         
         gameState.answers.set(socket.id, data.answer);
+        console.log(`📝 Answer received from ${socket.id}: ${data.answer} | Total answers: ${gameState.answers.size}`);
         
         socket.emit('answer-received', { answer: data.answer });
         
         // Notify admin of answer count
-        io.to('admins').emit('answer-count', {
+        broadcastToAdmins('answer-count', {
             count: gameState.answers.size,
             total: gameState.players.size
         });
@@ -296,11 +323,12 @@ io.on('connection', (socket) => {
     
     // Admin starts game
     socket.on('admin-start-game', () => {
+        console.log('🎮 Admin starting game...');
         resetGame();
         io.emit('game-started');
         io.emit('game-state', { status: 'waiting', totalQuestions: questions.length });
         
-        io.to('admins').emit('admin-update', {
+        broadcastToAdmins('admin-update', {
             status: 'waiting',
             currentQuestion: -1,
             totalQuestions: questions.length,
@@ -312,9 +340,11 @@ io.on('connection', (socket) => {
     
     // Admin shows next question
     socket.on('admin-next-question', () => {
+        console.log('⏭️ Admin showing next question...');
         if (gameState.currentQuestion >= questions.length - 1) {
             // Game finished
             gameState.status = 'finished';
+            console.log('🏁 Game finished!');
             io.emit('game-finished', {
                 leaderboard: getLeaderboard(),
                 totalQuestions: questions.length
@@ -327,6 +357,7 @@ io.on('connection', (socket) => {
         gameState.answers.clear();
         
         const question = getCurrentQuestionForPlayers();
+        console.log(`❓ Question ${gameState.currentQuestion + 1}: Broadcasting to all players`);
         
         io.emit('new-question', {
             question: question,
@@ -335,7 +366,7 @@ io.on('connection', (socket) => {
         
         startTimer();
         
-        io.to('admins').emit('admin-update', {
+        broadcastToAdmins('admin-update', {
             status: gameState.status,
             currentQuestion: gameState.currentQuestion,
             totalQuestions: questions.length,
@@ -347,6 +378,7 @@ io.on('connection', (socket) => {
     
     // Admin reveals answer early
     socket.on('admin-reveal-answer', () => {
+        console.log('👀 Admin revealing answer early...');
         if (gameState.status !== 'question') return;
         if (timerInterval) {
             clearInterval(timerInterval);
@@ -357,6 +389,7 @@ io.on('connection', (socket) => {
     
     // Admin resets game
     socket.on('admin-reset-game', () => {
+        console.log('🔄 Admin resetting game...');
         if (timerInterval) {
             clearInterval(timerInterval);
             timerInterval = null;
@@ -365,7 +398,7 @@ io.on('connection', (socket) => {
         
         io.emit('game-reset');
         
-        io.to('admins').emit('admin-update', {
+        broadcastToAdmins('admin-update', {
             status: gameState.status,
             currentQuestion: gameState.currentQuestion,
             totalQuestions: questions.length,
@@ -384,8 +417,8 @@ io.on('connection', (socket) => {
         questions.push(newQuestion);
         saveQuestions(questions);
         
-        io.to('admins').emit('questions-updated', { questions });
-        io.to('admins').emit('admin-update', {
+        broadcastToAdmins('questions-updated', { questions });
+        broadcastToAdmins('admin-update', {
             status: gameState.status,
             currentQuestion: gameState.currentQuestion,
             totalQuestions: questions.length,
@@ -407,7 +440,7 @@ io.on('connection', (socket) => {
             };
             saveQuestions(questions);
             
-            io.to('admins').emit('questions-updated', { questions });
+            broadcastToAdmins('questions-updated', { questions });
             console.log('Question updated at index:', index);
         }
     });
@@ -419,8 +452,8 @@ io.on('connection', (socket) => {
             questions.splice(index, 1);
             saveQuestions(questions);
             
-            io.to('admins').emit('questions-updated', { questions });
-            io.to('admins').emit('admin-update', {
+            broadcastToAdmins('questions-updated', { questions });
+            broadcastToAdmins('admin-update', {
                 status: gameState.status,
                 currentQuestion: gameState.currentQuestion,
                 totalQuestions: questions.length,
@@ -435,14 +468,20 @@ io.on('connection', (socket) => {
     
     // Handle disconnect
     socket.on('disconnect', () => {
+        // Check if admin disconnected
+        if (adminSockets.has(socket.id)) {
+            adminSockets.delete(socket.id);
+            console.log('❌ Admin disconnected:', socket.id, 'Remaining admins:', adminSockets.size);
+        }
+        
         const player = gameState.players.get(socket.id);
         if (player) {
-            console.log(`Player disconnected: ${player.name}`);
+            console.log(`❌ Player disconnected: ${player.name} | Remaining: ${gameState.players.size - 1}`);
         }
         gameState.players.delete(socket.id);
         gameState.answers.delete(socket.id);
         
-        io.to('admins').emit('player-left', {
+        broadcastToAdmins('player-left', {
             playerCount: gameState.players.size,
             leaderboard: getLeaderboard()
         });
