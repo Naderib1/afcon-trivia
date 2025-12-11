@@ -12,13 +12,22 @@ const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
         origin: "*",
-        methods: ["GET", "POST"]
+        methods: ["GET", "POST"],
+        credentials: true
     },
-    transports: ['websocket', 'polling']
+    transports: ['polling', 'websocket'],
+    allowEIO3: true,
+    pingTimeout: 60000,
+    pingInterval: 25000
 });
 
 // Trust proxy for platforms like Render, Railway, Heroku
 app.set('trust proxy', 1);
+
+// Health check endpoint for Railway
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'ok', players: gameState.players.size });
+});
 
 // Questions file path
 const QUESTIONS_FILE = './questions.json';

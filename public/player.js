@@ -1,5 +1,26 @@
 // AFCON Trivia - Player Client with i18n
-const socket = io();
+const socket = io({
+    transports: ['polling', 'websocket'],
+    upgrade: true,
+    rememberUpgrade: true,
+    reconnection: true,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 1000,
+    timeout: 20000
+});
+
+// Connection status
+socket.on('connect', () => {
+    console.log('✅ Connected to server:', socket.id);
+});
+
+socket.on('connect_error', (error) => {
+    console.error('❌ Connection error:', error);
+});
+
+socket.on('reconnect', (attemptNumber) => {
+    console.log('🔄 Reconnected after', attemptNumber, 'attempts');
+});
 
 // Translations
 const translations = {
@@ -418,9 +439,6 @@ elements.joinForm.addEventListener('submit', (e) => {
 });
 
 // Socket Events
-socket.on('connect', () => {
-    console.log('Connected to server');
-});
 
 socket.on('game-state', (data) => {
     if (data.totalQuestions) {
