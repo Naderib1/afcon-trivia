@@ -272,7 +272,14 @@ io.on('connection', (socket) => {
     socket.on('join-game', (data) => {
         const playerName = data.name.trim().substring(0, 20);
         const playerLang = data.lang || 'en';
-        const playerPhoto = data.photo || null;
+        
+        // Limit photo size to prevent memory issues (max ~50KB base64)
+        let playerPhoto = null;
+        if (data.photo && data.photo.length < 70000) {
+            playerPhoto = data.photo;
+        } else if (data.photo) {
+            console.log(`⚠️ Photo too large for ${playerName}: ${Math.round(data.photo.length / 1024)}KB - skipping`);
+        }
         
         gameState.players.set(socket.id, {
             name: playerName,

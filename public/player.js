@@ -397,23 +397,60 @@ elements.photoBtn.addEventListener('click', () => {
     elements.photoInput.click();
 });
 
+// Compress image to reduce size
+function compressImage(file, maxWidth = 150, quality = 0.6) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                
+                // Calculate new dimensions
+                if (width > maxWidth) {
+                    height = (height * maxWidth) / width;
+                    width = maxWidth;
+                }
+                
+                canvas.width = width;
+                canvas.height = height;
+                
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                // Convert to compressed base64
+                const compressedData = canvas.toDataURL('image/jpeg', quality);
+                console.log('📷 Photo compressed:', Math.round(compressedData.length / 1024), 'KB');
+                resolve(compressedData);
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
 // Photo input change - handle selected/captured photo
-elements.photoInput.addEventListener('change', (e) => {
+elements.photoInput.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (file) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const photoData = event.target.result;
-            playerState.photo = photoData;
+        try {
+            // Compress the image before storing
+            const compressedPhoto = await compressImage(file, 150, 0.6);
+            playerState.photo = compressedPhoto;
             
             // Update preview
-            elements.photoPreview.innerHTML = `<img src="${photoData}" alt="Your photo">`;
+            elements.photoPreview.innerHTML = `<img src="${compressedPhoto}" alt="Your photo">`;
             
             // Update button text
             elements.photoBtn.innerHTML = `<span>✓</span><span>${translations[currentLang].addPhoto}</span>`;
             elements.photoBtn.style.background = 'linear-gradient(135deg, #0EC76A 0%, #0aa858 100%)';
-        };
-        reader.readAsDataURL(file);
+        } catch (err) {
+            console.error('Photo compression error:', err);
+            // Fallback: don't use photo
+            playerState.photo = null;
+        }
     }
 });
 
