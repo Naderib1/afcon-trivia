@@ -381,6 +381,12 @@ io.on('connection', (socket) => {
             leaderboard: getLeaderboard(),
             questions: questions
         });
+        
+        // Reset answer count for new question
+        broadcastToAdmins('answer-count', {
+            count: 0,
+            total: gameState.players.size
+        });
     });
     
     // Admin reveals answer early

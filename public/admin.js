@@ -48,7 +48,9 @@ const elements = {
     qTextFr: document.getElementById('q-text-fr'),
     qExplanationEn: document.getElementById('q-explanation-en'),
     qExplanationAr: document.getElementById('q-explanation-ar'),
-    qExplanationFr: document.getElementById('q-explanation-fr')
+    qExplanationFr: document.getElementById('q-explanation-fr'),
+    winnersDownload: document.getElementById('winners-download'),
+    btnDownloadWinners: document.getElementById('btn-download-winners')
 };
 
 // Game State
@@ -56,7 +58,8 @@ let adminState = {
     status: 'waiting',
     currentQuestion: -1,
     totalQuestions: 10,
-    questions: []
+    questions: [],
+    leaderboard: []
 };
 
 // Format status for display
@@ -77,21 +80,27 @@ function updateButtons(status) {
             elements.btnStart.disabled = false;
             elements.btnNext.disabled = false;
             elements.btnReveal.disabled = true;
+            elements.winnersDownload.style.display = 'none';
             break;
         case 'question':
             elements.btnStart.disabled = true;
             elements.btnNext.disabled = true;
             elements.btnReveal.disabled = false;
+            elements.winnersDownload.style.display = 'none';
+            // Reset answer count for new question
+            elements.answerCount.textContent = '0';
             break;
         case 'answer':
             elements.btnStart.disabled = true;
             elements.btnNext.disabled = false;
             elements.btnReveal.disabled = true;
+            elements.winnersDownload.style.display = 'none';
             break;
         case 'finished':
             elements.btnStart.disabled = false;
             elements.btnNext.disabled = true;
             elements.btnReveal.disabled = true;
+            elements.winnersDownload.style.display = 'block';
             break;
     }
 }
@@ -123,6 +132,9 @@ function updateCurrentQuestion(questionIndex) {
 
 // Update leaderboard
 function updateLeaderboard(leaderboard) {
+    // Store leaderboard in state
+    adminState.leaderboard = leaderboard || [];
+    
     if (!leaderboard || leaderboard.length === 0) {
         elements.adminLeaderboard.innerHTML = '<li class="empty-state">No players yet</li>';
         return;
@@ -294,6 +306,127 @@ function saveQuestion() {
     closeModal();
 }
 
+// Download top 3 winners as images
+async function downloadWinners() {
+    const top3 = adminState.leaderboard.slice(0, 3);
+    if (top3.length === 0) {
+        alert('No winners to download!');
+        return;
+    }
+    
+    const medals = ['🥇', '🥈', '🥉'];
+    const ranks = ['1st', '2nd', '3rd'];
+    
+    for (let i = 0; i < top3.length; i++) {
+        const player = top3[i];
+        
+        // Create a canvas for the winner card
+        const canvas = document.createElement('canvas');
+        canvas.width = 800;
+        canvas.height = 500;
+        const ctx = canvas.getContext('2d');
+        
+        // Background gradient
+        const gradient = ctx.createLinearGradient(0, 0, 800, 500);
+        gradient.addColorStop(0, '#B22222');
+        gradient.addColorStop(1, '#8B0000');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 800, 500);
+        
+        // Gold accent bar
+        ctx.fillStyle = '#FFD700';
+        ctx.fillRect(0, 450, 800, 50);
+        
+        // Title
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 36px Poppins, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('AFCON TRIVIA WINNER', 400, 50);
+        
+        // Medal/Rank
+        ctx.font = '60px sans-serif';
+        ctx.fillText(medals[i], 400, 120);
+        ctx.font = 'bold 28px Poppins, sans-serif';
+        ctx.fillText(ranks[i] + ' PLACE', 400, 160);
+        
+        // Player photo or circle with initial
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(400, 260, 80, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
+        
+        if (player.photo) {
+            try {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                await new Promise((resolve, reject) => {
+                    img.onload = resolve;
+                    img.onerror = reject;
+                    img.src = player.photo;
+                });
+                ctx.drawImage(img, 320, 180, 160, 160);
+            } catch (e) {
+                // Fallback to circle with initial
+                ctx.fillStyle = '#FFD700';
+                ctx.fill();
+                ctx.restore();
+                ctx.save();
+                ctx.fillStyle = '#B22222';
+                ctx.font = 'bold 60px Poppins, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(player.name.charAt(0).toUpperCase(), 400, 260);
+            }
+        } else {
+            ctx.fillStyle = '#FFD700';
+            ctx.fill();
+            ctx.restore();
+            ctx.save();
+            ctx.fillStyle = '#B22222';
+            ctx.font = 'bold 60px Poppins, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(player.name.charAt(0).toUpperCase(), 400, 260);
+        }
+        ctx.restore();
+        
+        // Circle border
+        ctx.strokeStyle = '#FFD700';
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.arc(400, 260, 80, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Player name
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 40px Poppins, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(player.name, 400, 380);
+        
+        // Score
+        ctx.fillStyle = '#FFD700';
+        ctx.font = 'bold 32px Poppins, sans-serif';
+        ctx.fillText(player.score + ' POINTS', 400, 425);
+        
+        // Footer text
+        ctx.fillStyle = '#B22222';
+        ctx.font = '16px Poppins, sans-serif';
+        ctx.fillText('AFRICA CUP OF NATIONS - MOROCCO 2025', 400, 480);
+        
+        // Download the image
+        const link = document.createElement('a');
+        link.download = `AFCON_Winner_${ranks[i].replace(' ', '_')}_${player.name.replace(/\s+/g, '_')}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        
+        // Small delay between downloads
+        await new Promise(r => setTimeout(r, 500));
+    }
+    
+    alert('✅ Downloaded ' + top3.length + ' winner cards!');
+}
+
 // Make functions global for onclick handlers
 window.editQuestion = editQuestion;
 window.deleteQuestion = deleteQuestion;
@@ -321,6 +454,7 @@ elements.btnAddQuestion.addEventListener('click', openAddModal);
 elements.modalClose.addEventListener('click', closeModal);
 elements.btnModalCancel.addEventListener('click', closeModal);
 elements.btnModalSave.addEventListener('click', saveQuestion);
+elements.btnDownloadWinners.addEventListener('click', downloadWinners);
 
 // Close modal on overlay click
 elements.questionModal.addEventListener('click', (e) => {
