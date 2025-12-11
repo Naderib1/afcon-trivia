@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AFCON Trivia 🏆</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Righteous&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="images/logo.png" type="image/png">
+</head>
+<body>
+    <!-- Language Selection Screen -->
+    <div id="language-screen" class="screen active">
+        <div class="container">
+            <div class="logo-header">
+                <img src="images/logo.png" alt="AFCON" class="afcon-logo">
+                <div class="logo-text">
+                    <span class="logo-title">AFCON Trivia</span>
+                </div>
+            </div>
+            <p class="subtitle">Choose your language / اختر لغتك / Choisissez votre langue</p>
+            
+            <div class="lang-buttons">
+                <button class="lang-btn" data-lang="en">
+                    <span class="flag">🇬🇧</span>
+                    <span>English</span>
+                </button>
+                <button class="lang-btn" data-lang="ar">
+                    <span class="flag">🇸🇦</span>
+                    <span>العربية</span>
+                </button>
+                <button class="lang-btn" data-lang="fr">
+                    <span class="flag">🇫🇷</span>
+                    <span>Français</span>
+                </button>
+            </div>
+        </div>
+        <div class="bg-pattern"></div>
+    </div>
+
+    <!-- Welcome Screen -->
+    <div id="welcome-screen" class="screen">
+        <div class="container">
+            <div class="logo-header">
+                <img src="images/logo.png" alt="AFCON" class="afcon-logo">
+                <div class="logo-text">
+                    <span class="logo-title">AFCON Trivia</span>
+                </div>
+            </div>
+            <p class="subtitle" data-i18n="subtitle">Test your African football knowledge!</p>
+            
+            <form id="join-form">
+                <!-- Photo Upload Section -->
+                <div class="photo-upload-section">
+                    <div class="photo-preview" id="photo-preview">
+                        <span class="photo-placeholder">📷</span>
+                    </div>
+                    <input type="file" id="photo-input" accept="image/*" capture="user" hidden>
+                    <button type="button" class="photo-btn" id="photo-btn">
+                        <span>📸</span>
+                        <span data-i18n="addPhoto">Add Photo</span>
+                    </button>
+                    <p class="photo-hint" data-i18n="photoOptional">(Optional)</p>
+                </div>
+                
+                <div class="input-group">
+                    <input type="text" id="player-name" data-i18n-placeholder="enterName" placeholder="Enter your name" maxlength="20" required autocomplete="off">
+                    <div class="input-icon">👤</div>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <span data-i18n="joinGame">Join Game</span>
+                    <span class="btn-icon">⚽</span>
+                </button>
+            </form>
+        </div>
+        <div class="bg-pattern"></div>
+    </div>
+
+    <!-- Waiting Screen -->
+    <div id="waiting-screen" class="screen">
+        <div class="container">
+            <div class="player-badge">
+                <div class="badge-photo" id="badge-photo">
+                    <span>🎮</span>
+                </div>
+                <span id="display-name">Player</span>
+            </div>
+            
+            <div class="waiting-content">
+                <div class="waiting-logo-container">
+                    <img src="images/logo.png" alt="AFCON" class="afcon-logo">
+                    <div class="trivia-text">TRIVIA</div>
+                </div>
+                <h2 data-i18n="getReady">Get Ready!</h2>
+                <p data-i18n="waitingForGame">Waiting for the game to start...</p>
+                <div class="score-preview">
+                    <span data-i18n="yourScore">Your Score:</span>
+                    <strong id="waiting-score">0</strong>
+                </div>
+            </div>
+        </div>
+        <div class="bg-pattern"></div>
+    </div>
+
+    <!-- Question Screen -->
+    <div id="question-screen" class="screen">
+        <div class="question-header">
+            <div class="header-logo-section">
+                <img src="images/logo.png" alt="AFCON" class="afcon-logo">
+                <span class="header-title">AFCON Trivia</span>
+            </div>
+            <div class="question-info">
+                <span class="question-number">Q<span id="q-number">1</span>/<span id="q-total">10</span></span>
+                <span class="player-score">⭐ <span id="game-score">0</span></span>
+            </div>
+            <div class="timer-container">
+                <div class="timer-ring">
+                    <svg viewBox="0 0 100 100">
+                        <circle class="timer-bg" cx="50" cy="50" r="45"/>
+                        <circle class="timer-progress" id="timer-circle" cx="50" cy="50" r="45"/>
+                    </svg>
+                    <span class="timer-text" id="timer-text">60</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="question-content">
+            <h2 class="question-text" id="question-text">Loading question...</h2>
+            
+            <div class="options-container" id="options-container">
+                <!-- Options will be inserted here -->
+            </div>
+        </div>
+        
+        <div class="answer-status" id="answer-status">
+            <span class="status-icon">✓</span>
+            <span class="status-text" data-i18n="answerLocked">Answer locked!</span>
+        </div>
+        <div class="bg-pattern"></div>
+    </div>
+
+    <!-- Result Screen -->
+    <div id="result-screen" class="screen">
+        <div class="result-container">
+            <div class="result-icon" id="result-icon">🎉</div>
+            <h2 class="result-title" id="result-title">Correct!</h2>
+            <p class="result-explanation" id="result-explanation">Loading...</p>
+            
+            <div class="score-update">
+                <span data-i18n="yourScore">Your Score</span>
+                <strong id="result-score">0</strong>
+            </div>
+            
+            <p class="next-hint" data-i18n="nextQuestion">Next question coming up...</p>
+        </div>
+        <div class="bg-pattern"></div>
+    </div>
+
+    <!-- Final Screen -->
+    <div id="final-screen" class="screen">
+        <div class="final-container">
+            <div class="confetti" id="confetti"></div>
+            
+            <div class="final-logo-container">
+                <img src="images/logo.png" alt="AFCON" class="afcon-logo">
+                <div class="trivia-text">TRIVIA</div>
+            </div>
+            
+            <h1 data-i18n="gameOver">Game Over!</h1>
+            
+            <div class="final-score-box">
+                <span data-i18n="finalScore">Your Final Score</span>
+                <strong id="final-score">0</strong>
+                <span class="max-score">/ <span id="max-possible-score">100</span></span>
+            </div>
+            
+            <div class="leaderboard-section">
+                <h3>🏅 <span data-i18n="topPlayers">Top Players</span></h3>
+                <ol class="leaderboard" id="final-leaderboard">
+                    <!-- Leaderboard items -->
+                </ol>
+            </div>
+            
+            <p class="thanks-message" data-i18n="thanks">Thanks for playing AFCON Trivia!</p>
+        </div>
+        <div class="bg-pattern"></div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="player.js"></script>
+</body>
+</html>

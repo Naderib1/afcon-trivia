@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AFCON Trivia - Admin Panel</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Righteous&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="admin.css">
+    <link rel="icon" href="images/logo.png" type="image/png">
+</head>
+<body>
+    <div class="admin-container">
+        <header class="admin-header">
+            <div class="logo">
+                <img src="images/logo.png" alt="AFCON Morocco 25" class="header-logo-img">
+                <div class="logo-text">
+                    <h1>AFCON Trivia</h1>
+                    <span class="admin-badge">ADMIN CONTROL</span>
+                </div>
+            </div>
+            <div class="status-bar">
+                <div class="status-item">
+                    <span class="status-label">Status</span>
+                    <span class="status-value" id="game-status">Waiting</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Players</span>
+                    <span class="status-value" id="player-count">0</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Question</span>
+                    <span class="status-value"><span id="current-q">0</span>/<span id="total-q">10</span></span>
+                </div>
+            </div>
+        </header>
+
+        <main class="admin-main">
+            <section class="controls-section">
+                <h2>🎮 Game Controls</h2>
+                <div class="control-buttons">
+                    <button id="btn-start" class="control-btn btn-start">
+                        <span class="btn-icon">▶️</span>
+                        <span>Start Game</span>
+                    </button>
+                    <button id="btn-next" class="control-btn btn-next" disabled>
+                        <span class="btn-icon">➡️</span>
+                        <span>Next Question</span>
+                    </button>
+                    <button id="btn-reveal" class="control-btn btn-reveal" disabled>
+                        <span class="btn-icon">👁️</span>
+                        <span>Reveal Answer</span>
+                    </button>
+                    <button id="btn-reset" class="control-btn btn-reset">
+                        <span class="btn-icon">🔄</span>
+                        <span>Reset Game</span>
+                    </button>
+                </div>
+                
+                <div class="answer-tracker" id="answer-tracker">
+                    <span class="tracker-label">Answers Received:</span>
+                    <span class="tracker-count"><span id="answer-count">0</span> / <span id="answer-total">0</span></span>
+                </div>
+            </section>
+
+            <section class="qr-section">
+                <h2>📱 QR Code for Players</h2>
+                <div class="qr-container">
+                    <img src="images/logo.png" alt="AFCON" class="qr-logo">
+                    <div id="qr-code" class="qr-code">
+                        <div class="qr-loading">Loading QR...</div>
+                    </div>
+                    <p class="qr-url" id="qr-url">Loading...</p>
+                    <p class="qr-hint">Players scan this to join!</p>
+                </div>
+            </section>
+
+            <section class="current-question-section" id="current-question-section">
+                <h2>❓ Current Question</h2>
+                <div class="current-question-card" id="current-question-card">
+                    <p class="no-question">No question active</p>
+                </div>
+            </section>
+
+            <section class="leaderboard-section">
+                <h2>🏅 Leaderboard</h2>
+                <div class="leaderboard-container">
+                    <ol class="leaderboard" id="admin-leaderboard">
+                        <li class="empty-state">No players yet</li>
+                    </ol>
+                </div>
+            </section>
+
+            <section class="questions-section">
+                <div class="questions-header">
+                    <h2>📝 Questions Editor</h2>
+                    <button class="btn-add-question" id="btn-add-question">
+                        <span>➕</span>
+                        <span>Add Question</span>
+                    </button>
+                </div>
+                <div class="questions-list" id="questions-list">
+                    <!-- Questions will be loaded here -->
+                </div>
+            </section>
+        </main>
+
+        <footer class="admin-footer">
+            <img src="images/logo.png" alt="AFCON Morocco 25" class="footer-logo-img">
+            <p>Africa Cup of Nations - Morocco 2025</p>
+        </footer>
+    </div>
+
+    <!-- Question Editor Modal -->
+    <div class="modal-overlay" id="question-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modal-title">Add Question</h3>
+                <button class="modal-close" id="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="question-form">
+                    <input type="hidden" id="question-id">
+                    
+                    <div class="form-group">
+                        <label>Question (English) *</label>
+                        <textarea id="q-text-en" required placeholder="Enter question in English"></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Question (العربية)</label>
+                        <textarea id="q-text-ar" placeholder="أدخل السؤال بالعربية" dir="rtl"></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Question (Français)</label>
+                        <textarea id="q-text-fr" placeholder="Entrez la question en français"></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Options (Select correct answer) *</label>
+                        <div class="options-inputs">
+                            <div class="option-input-row">
+                                <input type="radio" name="correct" value="0" id="correct-0" checked>
+                                <input type="text" id="option-0" placeholder="Option A" required>
+                                <label for="correct-0">✓</label>
+                            </div>
+                            <div class="option-input-row">
+                                <input type="radio" name="correct" value="1" id="correct-1">
+                                <input type="text" id="option-1" placeholder="Option B" required>
+                                <label for="correct-1">✓</label>
+                            </div>
+                            <div class="option-input-row">
+                                <input type="radio" name="correct" value="2" id="correct-2">
+                                <input type="text" id="option-2" placeholder="Option C" required>
+                                <label for="correct-2">✓</label>
+                            </div>
+                            <div class="option-input-row">
+                                <input type="radio" name="correct" value="3" id="correct-3">
+                                <input type="text" id="option-3" placeholder="Option D" required>
+                                <label for="correct-3">✓</label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Explanation (English)</label>
+                        <input type="text" id="q-explanation-en" placeholder="Fun fact shown after answer">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Explanation (العربية)</label>
+                        <input type="text" id="q-explanation-ar" placeholder="معلومة تظهر بعد الإجابة" dir="rtl">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Explanation (Français)</label>
+                        <input type="text" id="q-explanation-fr" placeholder="Information affichée après la réponse">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" id="btn-modal-cancel">Cancel</button>
+                <button class="btn-save" id="btn-modal-save">Save Question</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="admin.js"></script>
+</body>
+</html>
