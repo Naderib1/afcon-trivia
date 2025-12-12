@@ -42,16 +42,32 @@
                     <span class="status-label">Question</span>
                     <span class="status-value"><span id="current-q">0</span>/<span id="total-q">10</span></span>
                 </div>
+                <div class="status-item db-status">
+                    <span class="status-label">Database</span>
+                    <span class="status-value" id="db-version">v1</span>
+                </div>
             </div>
         </header>
 
         <main class="admin-main">
             <section class="controls-section">
                 <h2>🎮 Game Controls</h2>
+                
+                <!-- Auto-Play Indicator -->
+                <div class="autoplay-indicator" id="autoplay-indicator" style="display: none;">
+                    <span class="pulse-dot"></span>
+                    <span>AUTO-PLAY ACTIVE</span>
+                    <span class="autoplay-info">30s questions • 15s answers</span>
+                </div>
+                
                 <div class="control-buttons">
-                    <button id="btn-start" class="control-btn btn-start">
-                        <span class="btn-icon">▶️</span>
-                        <span>Start Game</span>
+                    <button id="btn-autoplay" class="control-btn btn-autoplay">
+                        <span class="btn-icon">🤖</span>
+                        <span>Start Auto-Play</span>
+                    </button>
+                    <button id="btn-stop-autoplay" class="control-btn btn-stop-autoplay" style="display: none;">
+                        <span class="btn-icon">⏹️</span>
+                        <span>Stop Auto-Play</span>
                     </button>
                     <button id="btn-next" class="control-btn btn-next" disabled>
                         <span class="btn-icon">➡️</span>
@@ -100,13 +116,19 @@
                     <h2>📝 Questions Database</h2>
                     <div class="questions-header-actions">
                         <span class="active-count" id="active-count">0 Active</span>
+                        <button class="btn-bulk btn-activate-all" id="btn-activate-all" title="Activate All">
+                            ✅ All
+                        </button>
+                        <button class="btn-bulk btn-deactivate-all" id="btn-deactivate-all" title="Deactivate All">
+                            ⬜ None
+                        </button>
                         <button class="btn-add-question" id="btn-add-question">
                             <span>➕</span>
                             <span>Add Question</span>
                         </button>
                     </div>
                 </div>
-                <p class="questions-hint">Toggle questions ON/OFF to select which ones to use in today's game (max 10 recommended)</p>
+                <p class="questions-hint">Toggle questions ON/OFF to select which ones to use. Auto-Play will cycle through all active questions automatically.</p>
                 <div class="questions-list" id="questions-list">
                     <!-- Questions will be loaded here -->
                 </div>

@@ -1,6 +1,7 @@
 [
   {
     "id": 1,
+    "active": true,
     "question": {
       "en": "Which country has won the most AFCON titles?",
       "ar": "أي دولة فازت بأكبر عدد من ألقاب كأس أمم أفريقيا؟",
@@ -16,6 +17,7 @@
   },
   {
     "id": 2,
+    "active": true,
     "question": {
       "en": "In what year was the first AFCON tournament held?",
       "ar": "في أي سنة أقيمت أول بطولة لكأس أمم أفريقيا؟",
@@ -31,6 +33,7 @@
   },
   {
     "id": 3,
+    "active": true,
     "question": {
       "en": "Who is the all-time top scorer in AFCON history?",
       "ar": "من هو الهداف التاريخي لكأس أمم أفريقيا؟",
@@ -46,6 +49,7 @@
   },
   {
     "id": 4,
+    "active": true,
     "question": {
       "en": "Which country hosted AFCON 2019?",
       "ar": "أي دولة استضافت كأس أمم أفريقيا 2019؟",
@@ -61,6 +65,7 @@
   },
   {
     "id": 5,
+    "active": true,
     "question": {
       "en": "How many countries participated in the first AFCON?",
       "ar": "كم عدد الدول المشاركة في أول كأس أمم أفريقيا؟",
@@ -76,6 +81,7 @@
   },
   {
     "id": 6,
+    "active": true,
     "question": {
       "en": "Which country won AFCON 2021 (held in 2022)?",
       "ar": "أي دولة فازت بكأس أمم أفريقيا 2021 (أقيمت 2022)؟",
@@ -91,6 +97,7 @@
   },
   {
     "id": 7,
+    "active": true,
     "question": {
       "en": "Which country will host AFCON 2025?",
       "ar": "أي دولة ستستضيف كأس أمم أفريقيا 2025؟",
@@ -106,6 +113,7 @@
   },
   {
     "id": 8,
+    "active": true,
     "question": {
       "en": "Which African player won the Ballon d'Or in 1995?",
       "ar": "أي لاعب أفريقي فاز بالكرة الذهبية عام 1995؟",
@@ -121,6 +129,7 @@
   },
   {
     "id": 9,
+    "active": true,
     "question": {
       "en": "Which country has won AFCON the most times after Egypt?",
       "ar": "أي دولة فازت بكأس أمم أفريقيا أكثر بعد مصر؟",
@@ -136,6 +145,7 @@
   },
   {
     "id": 10,
+    "active": true,
     "question": {
       "en": "Which legendary player is known as the 'Black Pearl' of African football?",
       "ar": "من هو اللاعب الأسطوري الملقب بـ'اللؤلؤة السوداء'؟",

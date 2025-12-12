@@ -1,6 +1,6 @@
-// AFCON Trivia - Admin Client with Multi-Game Support
+// AFCON Trivia - Admin Client with Multi-Game Support & Auto-Play
 const socket = io({
-    transports: ['polling', 'websocket'],
+    transports: ['websocket', 'polling'], // Prefer websocket
     upgrade: true,
     rememberUpgrade: true,
     reconnection: true,
@@ -27,7 +27,8 @@ const elements = {
     playerCount: document.getElementById('player-count'),
     currentQ: document.getElementById('current-q'),
     totalQ: document.getElementById('total-q'),
-    btnStart: document.getElementById('btn-start'),
+    btnAutoPlay: document.getElementById('btn-autoplay'),
+    btnStopAutoPlay: document.getElementById('btn-stop-autoplay'),
     btnNext: document.getElementById('btn-next'),
     btnReveal: document.getElementById('btn-reveal'),
     btnReset: document.getElementById('btn-reset'),
@@ -38,6 +39,8 @@ const elements = {
     adminLeaderboard: document.getElementById('admin-leaderboard'),
     questionsList: document.getElementById('questions-list'),
     btnAddQuestion: document.getElementById('btn-add-question'),
+    btnActivateAll: document.getElementById('btn-activate-all'),
+    btnDeactivateAll: document.getElementById('btn-deactivate-all'),
     questionModal: document.getElementById('question-modal'),
     modalTitle: document.getElementById('modal-title'),
     modalClose: document.getElementById('modal-close'),
@@ -54,7 +57,9 @@ const elements = {
     winnersDownload: document.getElementById('winners-download'),
     btnDownloadWinners: document.getElementById('btn-download-winners'),
     gameButtons: document.querySelectorAll('.game-btn'),
-    activeCount: document.getElementById('active-count')
+    activeCount: document.getElementById('active-count'),
+    autoPlayIndicator: document.getElementById('autoplay-indicator'),
+    dbVersion: document.getElementById('db-version')
 };
 
 // Game State
@@ -64,7 +69,11 @@ let adminState = {
     currentQuestion: -1,
     totalQuestions: 10,
     questions: [],
-    leaderboard: []
+    activeQuestions: [],
+    currentActiveQuestion: null,
+    leaderboard: [],
+    autoPlayMode: false,
+    dbVersion: 0
 };
 
 // Format status for display
@@ -78,31 +87,45 @@ function formatStatus(status) {
     return statusMap[status] || status;
 }
 
-// Update button states
-function updateButtons(status) {
+// Update button states based on game status and auto-play
+function updateButtons(status, autoPlayMode) {
+    const isAutoPlay = autoPlayMode || adminState.autoPlayMode;
+    
+    // Auto-play button visibility
+    if (elements.btnAutoPlay) {
+        elements.btnAutoPlay.style.display = isAutoPlay ? 'none' : 'flex';
+    }
+    if (elements.btnStopAutoPlay) {
+        elements.btnStopAutoPlay.style.display = isAutoPlay ? 'flex' : 'none';
+    }
+    
+    // Auto-play indicator
+    if (elements.autoPlayIndicator) {
+        elements.autoPlayIndicator.style.display = isAutoPlay ? 'flex' : 'none';
+    }
+    
     switch (status) {
         case 'waiting':
-            elements.btnStart.disabled = false;
+            if (elements.btnAutoPlay) elements.btnAutoPlay.disabled = false;
             elements.btnNext.disabled = false;
             elements.btnReveal.disabled = true;
             elements.winnersDownload.style.display = 'none';
             break;
         case 'question':
-            elements.btnStart.disabled = true;
+            if (elements.btnAutoPlay) elements.btnAutoPlay.disabled = true;
             elements.btnNext.disabled = true;
-            elements.btnReveal.disabled = false;
+            elements.btnReveal.disabled = isAutoPlay; // Disable reveal in auto-play
             elements.winnersDownload.style.display = 'none';
-            // Reset answer count for new question
-            elements.answerCount.textContent = '0';
+            if (elements.answerCount) elements.answerCount.textContent = '0';
             break;
         case 'answer':
-            elements.btnStart.disabled = true;
-            elements.btnNext.disabled = false;
+            if (elements.btnAutoPlay) elements.btnAutoPlay.disabled = true;
+            elements.btnNext.disabled = isAutoPlay; // Disable in auto-play
             elements.btnReveal.disabled = true;
             elements.winnersDownload.style.display = 'none';
             break;
         case 'finished':
-            elements.btnStart.disabled = false;
+            if (elements.btnAutoPlay) elements.btnAutoPlay.disabled = false;
             elements.btnNext.disabled = true;
             elements.btnReveal.disabled = true;
             elements.winnersDownload.style.display = 'block';
@@ -110,14 +133,16 @@ function updateButtons(status) {
     }
 }
 
-// Update current question display
-function updateCurrentQuestion(questionIndex) {
-    if (questionIndex < 0 || !adminState.questions || questionIndex >= adminState.questions.length) {
+// Update current question display - FIXED to use actual active question
+function updateCurrentQuestion() {
+    // Use the currentActiveQuestion sent from server (already from active questions)
+    const q = adminState.currentActiveQuestion;
+    
+    if (!q || adminState.currentQuestion < 0) {
         elements.currentQuestionCard.innerHTML = '<p class="no-question">No question active</p>';
         return;
     }
     
-    const q = adminState.questions[questionIndex];
     const letters = ['A', 'B', 'C', 'D'];
     const questionText = typeof q.question === 'object' ? q.question.en : q.question;
     
@@ -137,7 +162,6 @@ function updateCurrentQuestion(questionIndex) {
 
 // Update leaderboard
 function updateLeaderboard(leaderboard) {
-    // Store leaderboard in state
     adminState.leaderboard = leaderboard || [];
     
     if (!leaderboard || leaderboard.length === 0) {
@@ -197,20 +221,17 @@ async function downloadQR(gameId) {
         const response = await fetch(`/qr?game=${gameId}`);
         const data = await response.json();
         
-        // Create a canvas - 1920x1080 for stadium screens
         const canvas = document.createElement('canvas');
         canvas.width = 1920;
         canvas.height = 1080;
         const ctx = canvas.getContext('2d');
         
-        // Background gradient
         const gradient = ctx.createLinearGradient(0, 0, 1920, 1080);
         gradient.addColorStop(0, '#B22222');
         gradient.addColorStop(1, '#8B0000');
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, 1920, 1080);
         
-        // Decorative elements
         ctx.fillStyle = 'rgba(255, 215, 0, 0.1)';
         ctx.beginPath();
         ctx.arc(1700, 200, 300, 0, Math.PI * 2);
@@ -219,19 +240,16 @@ async function downloadQR(gameId) {
         ctx.arc(200, 900, 250, 0, Math.PI * 2);
         ctx.fill();
         
-        // White card area
         ctx.fillStyle = '#FFFFFF';
         ctx.beginPath();
         ctx.roundRect(560, 80, 800, 920, 40);
         ctx.fill();
         
-        // Title
         ctx.fillStyle = '#B22222';
         ctx.font = 'bold 72px Arial, sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText('AFCON TRIVIA', 960, 180);
         
-        // Game number with gold background
         ctx.fillStyle = '#FFD700';
         ctx.beginPath();
         ctx.roundRect(760, 200, 400, 90, 20);
@@ -240,7 +258,6 @@ async function downloadQR(gameId) {
         ctx.font = 'bold 60px Arial, sans-serif';
         ctx.fillText(`GAME ${gameId}`, 960, 268);
         
-        // QR Code
         const img = new Image();
         await new Promise((resolve, reject) => {
             img.onload = resolve;
@@ -249,7 +266,6 @@ async function downloadQR(gameId) {
         });
         ctx.drawImage(img, 610, 320, 700, 700);
         
-        // Footer text
         ctx.fillStyle = '#B22222';
         ctx.font = 'bold 36px Arial, sans-serif';
         ctx.fillText('SCAN TO PLAY!', 960, 900);
@@ -262,7 +278,6 @@ async function downloadQR(gameId) {
         ctx.font = '20px Arial, sans-serif';
         ctx.fillText('AFRICA CUP OF NATIONS - MOROCCO 2025', 960, 985);
         
-        // Download
         const link = document.createElement('a');
         link.download = `AFCON_Game_${gameId}_QR_1920x1080.png`;
         link.href = canvas.toDataURL('image/png');
@@ -274,24 +289,20 @@ async function downloadQR(gameId) {
     }
 }
 
-// Make downloadQR global
 window.downloadQR = downloadQR;
 
 // Switch game
 function switchGame(gameId) {
     currentGameId = gameId;
     
-    // Update button states
     elements.gameButtons.forEach(btn => {
         btn.classList.toggle('active', parseInt(btn.dataset.game) === gameId);
     });
     
-    // Update QR card highlights
     document.querySelectorAll('.qr-card').forEach(card => {
         card.classList.toggle('active', parseInt(card.dataset.game) === gameId);
     });
     
-    // Tell server we switched games
     socket.emit('admin-switch-game', { gameId });
 }
 
@@ -348,6 +359,11 @@ function toggleQuestion(index) {
     socket.emit('admin-toggle-question', { index });
 }
 
+// Bulk toggle all questions
+function bulkToggle(action) {
+    socket.emit('admin-bulk-toggle', { action });
+}
+
 // Open modal for adding question
 function openAddModal() {
     elements.modalTitle.textContent = 'Add Question';
@@ -365,7 +381,6 @@ function editQuestion(index) {
     elements.modalTitle.textContent = 'Edit Question';
     elements.questionId.value = index;
     
-    // Set question text
     if (typeof q.question === 'object') {
         elements.qTextEn.value = q.question.en || '';
         elements.qTextAr.value = q.question.ar || '';
@@ -376,15 +391,12 @@ function editQuestion(index) {
         elements.qTextFr.value = '';
     }
     
-    // Set options
     q.options.forEach((opt, i) => {
         document.getElementById(`option-${i}`).value = opt;
     });
     
-    // Set correct answer
     document.querySelector(`input[name="correct"][value="${q.correct}"]`).checked = true;
     
-    // Set explanations
     if (typeof q.explanation === 'object') {
         elements.qExplanationEn.value = q.explanation.en || '';
         elements.qExplanationAr.value = q.explanation.ar || '';
@@ -401,7 +413,6 @@ function editQuestion(index) {
 // Delete question
 function deleteQuestion(index) {
     if (!confirm('Are you sure you want to delete this question?')) return;
-    
     socket.emit('admin-delete-question', { index });
 }
 
@@ -435,7 +446,6 @@ function saveQuestion() {
         }
     };
     
-    // Validate
     if (!questionData.question.en || questionData.options.some(o => !o)) {
         alert('Please fill in the question and all options.');
         return;
@@ -450,7 +460,7 @@ function saveQuestion() {
     closeModal();
 }
 
-// Helper to draw photo with proper aspect ratio (no stretch) and mirror fix
+// Helper to draw photo with proper aspect ratio
 async function drawPlayerPhoto(ctx, photo, x, y, size) {
     if (!photo) return false;
     
@@ -463,17 +473,13 @@ async function drawPlayerPhoto(ctx, photo, x, y, size) {
             img.src = photo;
         });
         
-        // Calculate crop to make it square (center crop)
         const minDim = Math.min(img.width, img.height);
         const sx = (img.width - minDim) / 2;
         const sy = (img.height - minDim) / 2;
         
-        // Save context and flip horizontally to fix selfie mirror
         ctx.save();
         ctx.translate(x + size, y);
         ctx.scale(-1, 1);
-        
-        // Draw with proper aspect ratio
         ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, size, size);
         ctx.restore();
         
@@ -492,20 +498,17 @@ async function downloadWinners() {
         return;
     }
     
-    // Create canvas - 1920x1080 for stadium screens
     const canvas = document.createElement('canvas');
     canvas.width = 1920;
     canvas.height = 1080;
     const ctx = canvas.getContext('2d');
     
-    // Background gradient
     const gradient = ctx.createLinearGradient(0, 0, 1920, 1080);
     gradient.addColorStop(0, '#B22222');
     gradient.addColorStop(1, '#8B0000');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, 1920, 1080);
     
-    // Decorative gold circles
     ctx.fillStyle = 'rgba(255, 215, 0, 0.15)';
     ctx.beginPath();
     ctx.arc(100, 150, 200, 0, Math.PI * 2);
@@ -514,29 +517,25 @@ async function downloadWinners() {
     ctx.arc(1820, 930, 200, 0, Math.PI * 2);
     ctx.fill();
     
-    // Gold accent bar at bottom
     ctx.fillStyle = '#FFD700';
     ctx.fillRect(0, 1020, 1920, 60);
     
-    // Title
     ctx.fillStyle = '#FFFFFF';
     ctx.font = 'bold 80px Arial, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('AFCON TRIVIA WINNERS', 960, 100);
     
-    // Subtitle
     ctx.font = '36px Arial, sans-serif';
     ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
     ctx.fillText('Top 3 Players', 960, 150);
     
     const medals = ['🥇', '🥈', '🥉'];
     const ranks = ['1ST PLACE', '2ND PLACE', '3RD PLACE'];
-    const positions = [960, 400, 1520]; // Center, Left, Right (1st in center)
-    const photoSizes = [280, 200, 200]; // 1st place bigger
-    const yOffsets = [280, 350, 350]; // 1st place higher
+    const positions = [960, 400, 1520];
+    const photoSizes = [280, 200, 200];
+    const yOffsets = [280, 350, 350];
     
-    // Draw winners (1st in center, 2nd on left, 3rd on right)
-    const drawOrder = top3.length >= 2 ? [1, 0, 2] : [0]; // Draw 2nd, 1st, 3rd (1st on top)
+    const drawOrder = top3.length >= 2 ? [1, 0, 2] : [0];
     
     for (const orderIdx of drawOrder) {
         if (orderIdx >= top3.length) continue;
@@ -547,13 +546,11 @@ async function downloadWinners() {
         const y = yOffsets[orderIdx];
         const photoRadius = photoSize / 2;
         
-        // Photo circle background
         ctx.fillStyle = '#FFD700';
         ctx.beginPath();
         ctx.arc(x, y + photoRadius, photoRadius, 0, Math.PI * 2);
         ctx.fill();
         
-        // Draw player photo or initial
         ctx.save();
         ctx.beginPath();
         ctx.arc(x, y + photoRadius, photoRadius - 5, 0, Math.PI * 2);
@@ -562,7 +559,6 @@ async function downloadWinners() {
         const photoDrawn = await drawPlayerPhoto(ctx, player.photo, x - photoRadius + 5, y + 5, photoSize - 10);
         
         if (!photoDrawn) {
-            // Draw initial
             ctx.fillStyle = '#FFD700';
             ctx.fillRect(x - photoRadius, y, photoSize, photoSize);
             ctx.fillStyle = '#B22222';
@@ -573,41 +569,34 @@ async function downloadWinners() {
         }
         ctx.restore();
         
-        // Gold border
         ctx.strokeStyle = '#FFD700';
         ctx.lineWidth = orderIdx === 0 ? 8 : 6;
         ctx.beginPath();
         ctx.arc(x, y + photoRadius, photoRadius, 0, Math.PI * 2);
         ctx.stroke();
         
-        // Medal emoji
         ctx.font = orderIdx === 0 ? '80px Arial' : '60px Arial';
         ctx.textAlign = 'center';
         ctx.fillText(medals[orderIdx], x, y - 20);
         
-        // Rank text
         ctx.fillStyle = '#FFD700';
         ctx.font = orderIdx === 0 ? 'bold 36px Arial, sans-serif' : 'bold 28px Arial, sans-serif';
         ctx.fillText(ranks[orderIdx], x, y + photoSize + 50);
         
-        // Player name
         ctx.fillStyle = '#FFFFFF';
         ctx.font = orderIdx === 0 ? 'bold 52px Arial, sans-serif' : 'bold 40px Arial, sans-serif';
         ctx.fillText(player.name, x, y + photoSize + 100);
         
-        // Score
         ctx.fillStyle = '#FFD700';
         ctx.font = orderIdx === 0 ? 'bold 44px Arial, sans-serif' : 'bold 32px Arial, sans-serif';
         ctx.fillText(player.score + ' POINTS', x, y + photoSize + 150);
     }
     
-    // Footer text on gold bar
     ctx.fillStyle = '#8B0000';
     ctx.font = 'bold 28px Arial, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('AFRICA CUP OF NATIONS - MOROCCO 2025', 960, 1058);
     
-    // Download
     const link = document.createElement('a');
     link.download = `AFCON_Winners_1920x1080.png`;
     link.href = canvas.toDataURL('image/png');
@@ -620,11 +609,33 @@ async function downloadWinners() {
 window.editQuestion = editQuestion;
 window.deleteQuestion = deleteQuestion;
 window.toggleQuestion = toggleQuestion;
+window.bulkToggle = bulkToggle;
+
+// Start Auto-Play
+function startAutoPlay() {
+    if (confirm('Start Auto-Play mode?\n\n• Questions: 30 seconds each\n• Answers: 15 seconds each\n• Game runs automatically until finished')) {
+        socket.emit('admin-start-autoplay', {
+            questionDuration: 30,
+            answerDuration: 15
+        });
+    }
+}
+
+// Stop Auto-Play
+function stopAutoPlay() {
+    if (confirm('Stop Auto-Play mode? The game will pause at the current state.')) {
+        socket.emit('admin-stop-autoplay');
+    }
+}
 
 // Button Event Listeners
-elements.btnStart.addEventListener('click', () => {
-    socket.emit('admin-start-game');
-});
+if (elements.btnAutoPlay) {
+    elements.btnAutoPlay.addEventListener('click', startAutoPlay);
+}
+
+if (elements.btnStopAutoPlay) {
+    elements.btnStopAutoPlay.addEventListener('click', stopAutoPlay);
+}
 
 elements.btnNext.addEventListener('click', () => {
     socket.emit('admin-next-question');
@@ -641,19 +652,26 @@ elements.btnReset.addEventListener('click', () => {
 });
 
 elements.btnAddQuestion.addEventListener('click', openAddModal);
+
+if (elements.btnActivateAll) {
+    elements.btnActivateAll.addEventListener('click', () => bulkToggle('activate-all'));
+}
+
+if (elements.btnDeactivateAll) {
+    elements.btnDeactivateAll.addEventListener('click', () => bulkToggle('deactivate-all'));
+}
+
 elements.modalClose.addEventListener('click', closeModal);
 elements.btnModalCancel.addEventListener('click', closeModal);
 elements.btnModalSave.addEventListener('click', saveQuestion);
 elements.btnDownloadWinners.addEventListener('click', downloadWinners);
 
-// Close modal on overlay click
 elements.questionModal.addEventListener('click', (e) => {
     if (e.target === elements.questionModal) {
         closeModal();
     }
 });
 
-// Game button click handlers
 elements.gameButtons.forEach(btn => {
     btn.addEventListener('click', () => {
         const gameId = parseInt(btn.dataset.game);
@@ -661,7 +679,7 @@ elements.gameButtons.forEach(btn => {
     });
 });
 
-// Socket Events - Admin connect
+// Socket Events
 socket.on('connect', () => {
     console.log('✅ Admin fully connected, initializing...');
     socket.emit('admin-connect', { gameId: currentGameId });
@@ -669,12 +687,15 @@ socket.on('connect', () => {
 });
 
 socket.on('admin-update', (data) => {
-    // Only update if it's for our current game
     if (data.gameId && data.gameId !== currentGameId) return;
     
     adminState.status = data.status;
     adminState.currentQuestion = data.currentQuestion;
     adminState.totalQuestions = data.totalQuestions;
+    adminState.autoPlayMode = data.autoPlayMode || false;
+    adminState.currentActiveQuestion = data.currentActiveQuestion; // The actual question being shown
+    adminState.activeQuestions = data.activeQuestions || [];
+    adminState.dbVersion = data.dbVersion || 0;
     
     if (data.questions) {
         adminState.questions = data.questions;
@@ -687,15 +708,26 @@ socket.on('admin-update', (data) => {
     elements.totalQ.textContent = data.totalQuestions;
     elements.answerTotal.textContent = data.playerCount;
     
-    updateButtons(data.status);
-    updateCurrentQuestion(data.currentQuestion);
+    if (elements.dbVersion) {
+        elements.dbVersion.textContent = `v${data.dbVersion}`;
+    }
+    
+    updateButtons(data.status, data.autoPlayMode);
+    updateCurrentQuestion(); // Uses adminState.currentActiveQuestion now
     updateLeaderboard(data.leaderboard);
 });
 
 socket.on('questions-updated', (data) => {
     adminState.questions = data.questions;
-    adminState.totalQuestions = data.questions.length;
-    elements.totalQ.textContent = data.questions.length;
+    adminState.totalQuestions = data.questions.filter(q => q.active).length;
+    adminState.dbVersion = data.dbVersion || adminState.dbVersion;
+    
+    elements.totalQ.textContent = adminState.totalQuestions;
+    
+    if (elements.dbVersion) {
+        elements.dbVersion.textContent = `v${adminState.dbVersion}`;
+    }
+    
     renderQuestionsList();
 });
 
@@ -714,6 +746,10 @@ socket.on('player-left', (data) => {
 socket.on('answer-count', (data) => {
     elements.answerCount.textContent = data.count;
     elements.answerTotal.textContent = data.total;
+});
+
+socket.on('error', (data) => {
+    alert('⚠️ ' + (data.message || 'An error occurred'));
 });
 
 socket.on('disconnect', () => {

@@ -1,0 +1,216 @@
+{
+  "questions": [
+    {
+      "id": 1,
+      "active": true,
+      "question": {
+        "en": "Which country has won the most AFCON titles?",
+        "ar": "أي دولة فازت بأكبر عدد من ألقاب كأس أمم أفريقيا؟",
+        "fr": "Quel pays a remporté le plus de titres de la CAN?"
+      },
+      "options": [
+        "Nigeria",
+        "Egypt",
+        "Cameroon",
+        "Ghana"
+      ],
+      "correct": 1,
+      "explanation": {
+        "en": "Egypt has won 7 AFCON titles, the most in history!",
+        "ar": "فازت مصر بـ 7 ألقاب، وهو الأكثر في التاريخ!",
+        "fr": "L'Égypte a remporté 7 titres CAN, le plus dans l'histoire!"
+      }
+    },
+    {
+      "id": 2,
+      "active": true,
+      "question": {
+        "en": "In what year was the first AFCON tournament held?",
+        "ar": "في أي سنة أقيمت أول بطولة لكأس أمم أفريقيا؟",
+        "fr": "En quelle année s'est tenu le premier tournoi de la CAN?"
+      },
+      "options": [
+        "1957",
+        "1960",
+        "1965",
+        "1970"
+      ],
+      "correct": 0,
+      "explanation": {
+        "en": "The first AFCON was held in Sudan in 1957.",
+        "ar": "أقيمت أول بطولة في السودان عام 1957.",
+        "fr": "La première CAN a eu lieu au Soudan en 1957."
+      }
+    },
+    {
+      "id": 3,
+      "active": true,
+      "question": {
+        "en": "Who is the all-time top scorer in AFCON history?",
+        "ar": "من هو الهداف التاريخي لكأس أمم أفريقيا؟",
+        "fr": "Qui est le meilleur buteur de l'histoire de la CAN?"
+      },
+      "options": [
+        "Didier Drogba",
+        "Samuel Eto'o",
+        "Roger Milla",
+        "Rashid Yekini"
+      ],
+      "correct": 1,
+      "explanation": {
+        "en": "Samuel Eto'o holds the record with 18 goals!",
+        "ar": "صامويل إيتو يحمل الرقم القياسي بـ 18 هدفاً!",
+        "fr": "Samuel Eto'o détient le record avec 18 buts!"
+      }
+    },
+    {
+      "id": 4,
+      "active": true,
+      "question": {
+        "en": "Which country hosted AFCON 2019?",
+        "ar": "أي دولة استضافت كأس أمم أفريقيا 2019؟",
+        "fr": "Quel pays a accueilli la CAN 2019?"
+      },
+      "options": [
+        "Morocco",
+        "South Africa",
+        "Egypt",
+        "Ivory Coast"
+      ],
+      "correct": 2,
+      "explanation": {
+        "en": "Egypt hosted AFCON 2019, won by Algeria.",
+        "ar": "استضافت مصر البطولة 2019، وفازت بها الجزائر.",
+        "fr": "L'Égypte a accueilli la CAN 2019, remportée par l'Algérie."
+      }
+    },
+    {
+      "id": 5,
+      "active": true,
+      "question": {
+        "en": "How many countries participated in the first AFCON?",
+        "ar": "كم عدد الدول المشاركة في أول كأس أمم أفريقيا؟",
+        "fr": "Combien de pays ont participé à la première CAN?"
+      },
+      "options": [
+        "3",
+        "4",
+        "8",
+        "16"
+      ],
+      "correct": 0,
+      "explanation": {
+        "en": "Only 3 countries participated: Egypt, Sudan, and Ethiopia.",
+        "ar": "شاركت 3 دول فقط: مصر والسودان وإثيوبيا.",
+        "fr": "Seulement 3 pays ont participé: Égypte, Soudan et Éthiopie."
+      }
+    },
+    {
+      "id": 6,
+      "active": true,
+      "question": {
+        "en": "Which country won AFCON 2021 (held in 2022)?",
+        "ar": "أي دولة فازت بكأس أمم أفريقيا 2021 (أقيمت 2022)؟",
+        "fr": "Quel pays a gagné la CAN 2021 (tenue en 2022)?"
+      },
+      "options": [
+        "Egypt",
+        "Cameroon",
+        "Senegal",
+        "Algeria"
+      ],
+      "correct": 2,
+      "explanation": {
+        "en": "Senegal won their first-ever AFCON title!",
+        "ar": "فاز السنغال بأول لقب في تاريخه!",
+        "fr": "Le Sénégal a remporté son tout premier titre CAN!"
+      }
+    },
+    {
+      "id": 7,
+      "active": true,
+      "question": {
+        "en": "Which country will host AFCON 2025?",
+        "ar": "أي دولة ستستضيف كأس أمم أفريقيا 2025؟",
+        "fr": "Quel pays accueillera la CAN 2025?"
+      },
+      "options": [
+        "Egypt",
+        "Morocco",
+        "Algeria",
+        "South Africa"
+      ],
+      "correct": 1,
+      "explanation": {
+        "en": "Morocco will host AFCON 2025!",
+        "ar": "المغرب ستستضيف كأس أمم أفريقيا 2025!",
+        "fr": "Le Maroc accueillera la CAN 2025!"
+      }
+    },
+    {
+      "id": 8,
+      "active": true,
+      "question": {
+        "en": "Which African player won the Ballon d'Or in 1995?",
+        "ar": "أي لاعب أفريقي فاز بالكرة الذهبية عام 1995؟",
+        "fr": "Quel joueur africain a remporté le Ballon d'Or en 1995?"
+      },
+      "options": [
+        "Abedi Pele",
+        "George Weah",
+        "Roger Milla",
+        "Jay-Jay Okocha"
+      ],
+      "correct": 1,
+      "explanation": {
+        "en": "George Weah from Liberia won the 1995 Ballon d'Or!",
+        "ar": "جورج ويا من ليبيريا فاز بالكرة الذهبية 1995!",
+        "fr": "George Weah du Libéria a gagné le Ballon d'Or 1995!"
+      }
+    },
+    {
+      "id": 9,
+      "active": true,
+      "question": {
+        "en": "Which country has won AFCON the most times after Egypt?",
+        "ar": "أي دولة فازت بكأس أمم أفريقيا أكثر بعد مصر؟",
+        "fr": "Quel pays a gagné la CAN le plus après l'Égypte?"
+      },
+      "options": [
+        "Nigeria",
+        "Cameroon",
+        "Ghana",
+        "Algeria"
+      ],
+      "correct": 1,
+      "explanation": {
+        "en": "Cameroon has won 5 AFCON titles, second most!",
+        "ar": "الكاميرون فازت بـ 5 ألقاب، الثانية تاريخياً!",
+        "fr": "Le Cameroun a gagné 5 titres CAN, deuxième plus!"
+      }
+    },
+    {
+      "id": 10,
+      "active": true,
+      "question": {
+        "en": "Which legendary player is known as the 'Black Pearl' of African football?",
+        "ar": "من هو اللاعب الأسطوري الملقب بـ'اللؤلؤة السوداء'؟",
+        "fr": "Quel joueur légendaire est connu comme la 'Perle Noire'?"
+      },
+      "options": [
+        "George Weah",
+        "Jay-Jay Okocha",
+        "Abedi Pele",
+        "Nwankwo Kanu"
+      ],
+      "correct": 2,
+      "explanation": {
+        "en": "Abedi Pele of Ghana earned this iconic nickname!",
+        "ar": "أبيدي بيليه من غانا حصل على هذا اللقب الأيقوني!",
+        "fr": "Abedi Pele du Ghana a mérité ce surnom iconique!"
+      }
+    }
+  ],
+  "version": 2,
+  "lastUpdated": "2025-12-12T03:09:32.350Z"
+}

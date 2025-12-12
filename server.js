@@ -8,42 +8,72 @@ const fs = require('fs');
 const app = express();
 const server = http.createServer(app);
 
-// Configure Socket.io for production
+// Configure Socket.io for HIGH SCALABILITY (10K+ users)
 const io = new Server(server, {
     cors: {
         origin: "*",
         methods: ["GET", "POST"],
         credentials: true
     },
-    transports: ['polling', 'websocket'],
+    transports: ['websocket', 'polling'], // Prefer websocket for better performance
     allowEIO3: true,
     pingTimeout: 60000,
-    pingInterval: 25000
+    pingInterval: 25000,
+    // Scalability optimizations
+    maxHttpBufferSize: 1e6, // 1MB max message size
+    connectTimeout: 45000,
+    upgradeTimeout: 30000,
+    perMessageDeflate: {
+        threshold: 1024, // Compress messages > 1KB
+        zlibDeflateOptions: { chunkSize: 16 * 1024 },
+        zlibInflateOptions: { chunkSize: 16 * 1024 }
+    }
 });
 
 // Trust proxy for platforms like Render, Railway, Heroku
 app.set('trust proxy', 1);
 
-// Questions file path
-const QUESTIONS_FILE = './questions.json';
+// Database file path
+const DB_FILE = './database.json';
 
-// Load questions
-function loadQuestions() {
+// Load database
+function loadDatabase() {
     try {
-        const data = fs.readFileSync(QUESTIONS_FILE, 'utf8');
+        const data = fs.readFileSync(DB_FILE, 'utf8');
         return JSON.parse(data);
     } catch (err) {
-        console.log('No questions file found, starting fresh.');
-        return [];
+        console.log('No database file found, creating fresh database.');
+        return { questions: [], version: 1 };
     }
 }
 
-// Save questions
-function saveQuestions(questions) {
-    fs.writeFileSync(QUESTIONS_FILE, JSON.stringify(questions, null, 2));
+// Save database
+function saveDatabase() {
+    const data = {
+        questions: questions,
+        version: db.version + 1,
+        lastUpdated: new Date().toISOString()
+    };
+    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+    db.version = data.version;
+    console.log(`💾 Database saved (v${db.version})`);
 }
 
-let questions = loadQuestions();
+// Initialize database
+let db = loadDatabase();
+let questions = db.questions || [];
+
+// If old questions.json exists, migrate it
+try {
+    if (questions.length === 0 && fs.existsSync('./questions.json')) {
+        const oldData = fs.readFileSync('./questions.json', 'utf8');
+        questions = JSON.parse(oldData);
+        saveDatabase();
+        console.log('📦 Migrated questions from questions.json to database.json');
+    }
+} catch (err) {
+    console.log('No migration needed');
+}
 
 // Get only active questions for gameplay
 function getActiveQuestions() {
@@ -59,6 +89,7 @@ app.use(express.static('public'));
 const GAME_IDS = [1, 2, 3, 4];
 const games = {};
 const gameTimers = {};
+const autoPlayTimers = {}; // For auto-play mode
 const gameAdmins = {}; // Track admin sockets per game
 
 // Initialize all 4 games
@@ -68,11 +99,14 @@ GAME_IDS.forEach(gameId => {
         currentQuestion: -1,
         players: new Map(),
         questionStartTime: null,
-        questionDuration: 60,
-        timeRemaining: 60,
-        answers: new Map()
+        questionDuration: 30, // Default 30 seconds for questions
+        answerDuration: 15,   // 15 seconds for showing answer
+        timeRemaining: 30,
+        answers: new Map(),
+        autoPlayMode: false   // Auto-play toggle
     };
     gameTimers[gameId] = null;
+    autoPlayTimers[gameId] = null;
     gameAdmins[gameId] = new Set();
 });
 
@@ -89,6 +123,17 @@ function resetGame(gameId) {
     game.questionStartTime = null;
     game.timeRemaining = game.questionDuration;
     game.answers.clear();
+    game.autoPlayMode = false;
+    
+    // Clear any running timers
+    if (gameTimers[gameId]) {
+        clearInterval(gameTimers[gameId]);
+        gameTimers[gameId] = null;
+    }
+    if (autoPlayTimers[gameId]) {
+        clearTimeout(autoPlayTimers[gameId]);
+        autoPlayTimers[gameId] = null;
+    }
     
     game.players.forEach((player) => {
         player.score = 0;
@@ -166,6 +211,11 @@ function revealAnswer(gameId) {
     game.status = 'answer';
     const question = getCurrentQuestionWithAnswer(gameId);
     
+    if (!question) {
+        console.log(`⚠️ [Game ${gameId}] No question to reveal answer for`);
+        return;
+    }
+    
     console.log(`🎯 [Game ${gameId}] Revealing answer for question ${game.currentQuestion + 1}`);
     
     const results = [];
@@ -211,20 +261,130 @@ function revealAnswer(gameId) {
     
     // Notify admins of this game
     broadcastToGameAdmins(gameId, 'admin-update', getAdminUpdate(gameId));
+    
+    // Auto-play: schedule next question after answer duration
+    if (game.autoPlayMode) {
+        scheduleAutoPlayNext(gameId);
+    }
 }
 
-// Get admin update data
+// Schedule next question in auto-play mode
+function scheduleAutoPlayNext(gameId) {
+    const game = getGame(gameId);
+    const activeQuestions = getActiveQuestions();
+    
+    // Clear any existing auto-play timer
+    if (autoPlayTimers[gameId]) {
+        clearTimeout(autoPlayTimers[gameId]);
+    }
+    
+    console.log(`⏰ [Game ${gameId}] Auto-play: Next action in ${game.answerDuration}s`);
+    
+    autoPlayTimers[gameId] = setTimeout(() => {
+        // Check if we've finished all questions
+        if (game.currentQuestion >= activeQuestions.length - 1) {
+            finishGame(gameId);
+        } else {
+            showNextQuestion(gameId);
+        }
+    }, game.answerDuration * 1000);
+}
+
+// Finish game
+function finishGame(gameId) {
+    const game = getGame(gameId);
+    const activeQuestions = getActiveQuestions();
+    
+    game.status = 'finished';
+    game.autoPlayMode = false;
+    
+    // Clear timers
+    if (gameTimers[gameId]) {
+        clearInterval(gameTimers[gameId]);
+        gameTimers[gameId] = null;
+    }
+    if (autoPlayTimers[gameId]) {
+        clearTimeout(autoPlayTimers[gameId]);
+        autoPlayTimers[gameId] = null;
+    }
+    
+    console.log(`🏁 [Game ${gameId}] Game finished!`);
+    
+    // Send game-finished with leaderboard to all players
+    io.to(`game-${gameId}`).emit('game-finished', {
+        leaderboard: getLeaderboard(gameId),
+        totalQuestions: activeQuestions.length
+    });
+    
+    // Send individual final scores to each player
+    game.players.forEach((player, socketId) => {
+        io.to(socketId).emit('your-final-score', {
+            score: player.score,
+            totalQuestions: activeQuestions.length,
+            maxScore: activeQuestions.length * 10
+        });
+    });
+    
+    broadcastToGameAdmins(gameId, 'admin-update', getAdminUpdate(gameId));
+}
+
+// Show next question
+function showNextQuestion(gameId) {
+    const game = getGame(gameId);
+    const activeQuestions = getActiveQuestions();
+    
+    if (game.currentQuestion >= activeQuestions.length - 1) {
+        finishGame(gameId);
+        return;
+    }
+    
+    game.currentQuestion++;
+    game.status = 'question';
+    game.answers.clear();
+    
+    const question = getCurrentQuestionForPlayers(gameId);
+    
+    console.log(`❓ [Game ${gameId}] Showing question ${game.currentQuestion + 1}/${activeQuestions.length}`);
+    
+    io.to(`game-${gameId}`).emit('new-question', {
+        question: question,
+        timeRemaining: game.questionDuration
+    });
+    
+    startTimer(gameId);
+    
+    broadcastToGameAdmins(gameId, 'admin-update', getAdminUpdate(gameId));
+    broadcastToGameAdmins(gameId, 'answer-count', {
+        count: 0,
+        total: game.players.size
+    });
+}
+
+// Get admin update data - FIXED to include active questions mapping
 function getAdminUpdate(gameId) {
     const game = getGame(gameId);
     const activeQuestions = getActiveQuestions();
+    
+    // Get the actual current question being shown (from active questions)
+    let currentActiveQuestion = null;
+    if (game.currentQuestion >= 0 && game.currentQuestion < activeQuestions.length) {
+        currentActiveQuestion = activeQuestions[game.currentQuestion];
+    }
+    
     return {
         gameId: gameId,
         status: game.status,
         currentQuestion: game.currentQuestion,
+        currentActiveQuestion: currentActiveQuestion, // The actual question being shown
         totalQuestions: activeQuestions.length,
         playerCount: game.players.size,
         leaderboard: getLeaderboard(gameId),
-        questions: questions // All questions for the editor
+        questions: questions, // All questions for the editor
+        activeQuestions: activeQuestions, // Active questions for display
+        autoPlayMode: game.autoPlayMode,
+        questionDuration: game.questionDuration,
+        answerDuration: game.answerDuration,
+        dbVersion: db.version
     };
 }
 
@@ -238,7 +398,24 @@ function broadcastToGameAdmins(gameId, event, data) {
 // Health check endpoint
 app.get('/health', (req, res) => {
     const totalPlayers = GAME_IDS.reduce((sum, id) => sum + games[id].players.size, 0);
-    res.status(200).json({ status: 'ok', totalPlayers, games: GAME_IDS.length });
+    res.status(200).json({ 
+        status: 'ok', 
+        totalPlayers, 
+        games: GAME_IDS.length,
+        dbVersion: db.version,
+        questionsTotal: questions.length,
+        questionsActive: getActiveQuestions().length
+    });
+});
+
+// API endpoint to get database info
+app.get('/api/db-status', (req, res) => {
+    res.json({
+        version: db.version,
+        totalQuestions: questions.length,
+        activeQuestions: getActiveQuestions().length,
+        lastUpdated: db.lastUpdated || null
+    });
 });
 
 // Routes
@@ -407,7 +584,7 @@ io.on('connection', (socket) => {
         });
     });
     
-    // Admin starts game
+    // Admin starts game (manual mode - just resets)
     socket.on('admin-start-game', () => {
         if (!currentGameId) return;
         const activeQuestions = getActiveQuestions();
@@ -430,55 +607,70 @@ io.on('connection', (socket) => {
         broadcastToGameAdmins(currentGameId, 'admin-update', getAdminUpdate(currentGameId));
     });
     
-    // Admin shows next question
-    socket.on('admin-next-question', () => {
+    // Admin starts AUTO-PLAY mode
+    socket.on('admin-start-autoplay', (data) => {
         if (!currentGameId) return;
         const game = getGame(currentGameId);
         const activeQuestions = getActiveQuestions();
         
-        console.log(`⏭️ [Game ${currentGameId}] Admin showing next question... (${game.currentQuestion + 1}/${activeQuestions.length})`);
+        console.log(`🤖 [Game ${currentGameId}] Admin starting AUTO-PLAY mode...`);
         
-        if (game.currentQuestion >= activeQuestions.length - 1) {
-            game.status = 'finished';
-            console.log(`🏁 [Game ${currentGameId}] Game finished!`);
-            
-            // Send game-finished with leaderboard to all players
-            io.to(`game-${currentGameId}`).emit('game-finished', {
-                leaderboard: getLeaderboard(currentGameId),
-                totalQuestions: activeQuestions.length
-            });
-            
-            // Send individual final scores to each player
-            game.players.forEach((player, socketId) => {
-                io.to(socketId).emit('your-final-score', {
-                    score: player.score,
-                    totalQuestions: activeQuestions.length,
-                    maxScore: activeQuestions.length * 10
-                });
-            });
-            
-            broadcastToGameAdmins(currentGameId, 'admin-update', getAdminUpdate(currentGameId));
+        if (activeQuestions.length === 0) {
+            socket.emit('error', { message: 'No active questions! Please activate some questions first.' });
             return;
         }
         
-        game.currentQuestion++;
-        game.status = 'question';
-        game.answers.clear();
+        // Reset game and enable auto-play
+        resetGame(currentGameId);
+        game.autoPlayMode = true;
         
-        const question = getCurrentQuestionForPlayers(currentGameId);
+        // Apply custom durations if provided
+        if (data?.questionDuration) {
+            game.questionDuration = Math.max(10, Math.min(120, data.questionDuration));
+        }
+        if (data?.answerDuration) {
+            game.answerDuration = Math.max(5, Math.min(60, data.answerDuration));
+        }
         
-        io.to(`game-${currentGameId}`).emit('new-question', {
-            question: question,
-            timeRemaining: game.questionDuration
+        io.to(`game-${currentGameId}`).emit('game-started');
+        io.to(`game-${currentGameId}`).emit('game-state', { 
+            status: 'waiting', 
+            totalQuestions: activeQuestions.length,
+            gameId: currentGameId
         });
-        
-        startTimer(currentGameId);
         
         broadcastToGameAdmins(currentGameId, 'admin-update', getAdminUpdate(currentGameId));
-        broadcastToGameAdmins(currentGameId, 'answer-count', {
-            count: 0,
-            total: game.players.size
-        });
+        
+        // Start the first question after 3 seconds
+        setTimeout(() => {
+            if (game.autoPlayMode) {
+                showNextQuestion(currentGameId);
+            }
+        }, 3000);
+    });
+    
+    // Admin stops auto-play
+    socket.on('admin-stop-autoplay', () => {
+        if (!currentGameId) return;
+        const game = getGame(currentGameId);
+        
+        console.log(`⏹️ [Game ${currentGameId}] Admin stopping AUTO-PLAY mode`);
+        
+        game.autoPlayMode = false;
+        
+        // Clear auto-play timer
+        if (autoPlayTimers[currentGameId]) {
+            clearTimeout(autoPlayTimers[currentGameId]);
+            autoPlayTimers[currentGameId] = null;
+        }
+        
+        broadcastToGameAdmins(currentGameId, 'admin-update', getAdminUpdate(currentGameId));
+    });
+    
+    // Admin shows next question (manual)
+    socket.on('admin-next-question', () => {
+        if (!currentGameId) return;
+        showNextQuestion(currentGameId);
     });
     
     // Admin reveals answer early
@@ -502,11 +694,6 @@ io.on('connection', (socket) => {
         
         console.log(`🔄 [Game ${currentGameId}] Admin resetting game...`);
         
-        if (gameTimers[currentGameId]) {
-            clearInterval(gameTimers[currentGameId]);
-            gameTimers[currentGameId] = null;
-        }
-        
         resetGame(currentGameId);
         
         io.to(`game-${currentGameId}`).emit('game-reset');
@@ -517,14 +704,15 @@ io.on('connection', (socket) => {
     socket.on('admin-add-question', (data) => {
         const newQuestion = {
             id: Date.now(),
+            active: true, // New questions are active by default
             ...data.question
         };
         questions.push(newQuestion);
-        saveQuestions(questions);
+        saveDatabase();
         
         // Notify all admins
         GAME_IDS.forEach(gameId => {
-            broadcastToGameAdmins(gameId, 'questions-updated', { questions });
+            broadcastToGameAdmins(gameId, 'questions-updated', { questions, dbVersion: db.version });
             broadcastToGameAdmins(gameId, 'admin-update', getAdminUpdate(gameId));
         });
         
@@ -535,11 +723,16 @@ io.on('connection', (socket) => {
     socket.on('admin-update-question', (data) => {
         const { index, question } = data;
         if (index >= 0 && index < questions.length) {
-            questions[index] = { id: questions[index].id, ...question };
-            saveQuestions(questions);
+            // Preserve the id and active state
+            questions[index] = { 
+                id: questions[index].id, 
+                active: questions[index].active,
+                ...question 
+            };
+            saveDatabase();
             
             GAME_IDS.forEach(gameId => {
-                broadcastToGameAdmins(gameId, 'questions-updated', { questions });
+                broadcastToGameAdmins(gameId, 'questions-updated', { questions, dbVersion: db.version });
             });
         }
     });
@@ -549,10 +742,10 @@ io.on('connection', (socket) => {
         const { index } = data;
         if (index >= 0 && index < questions.length) {
             questions.splice(index, 1);
-            saveQuestions(questions);
+            saveDatabase();
             
             GAME_IDS.forEach(gameId => {
-                broadcastToGameAdmins(gameId, 'questions-updated', { questions });
+                broadcastToGameAdmins(gameId, 'questions-updated', { questions, dbVersion: db.version });
                 broadcastToGameAdmins(gameId, 'admin-update', getAdminUpdate(gameId));
             });
         }
@@ -563,16 +756,34 @@ io.on('connection', (socket) => {
         const { index } = data;
         if (index >= 0 && index < questions.length) {
             questions[index].active = !questions[index].active;
-            saveQuestions(questions);
+            saveDatabase();
             
             const activeCount = getActiveQuestions().length;
             console.log(`🔄 Question ${index + 1} ${questions[index].active ? 'activated' : 'deactivated'}. Active questions: ${activeCount}`);
             
             GAME_IDS.forEach(gameId => {
-                broadcastToGameAdmins(gameId, 'questions-updated', { questions });
+                broadcastToGameAdmins(gameId, 'questions-updated', { questions, dbVersion: db.version });
                 broadcastToGameAdmins(gameId, 'admin-update', getAdminUpdate(gameId));
             });
         }
+    });
+    
+    // Admin bulk toggle questions
+    socket.on('admin-bulk-toggle', (data) => {
+        const { action } = data; // 'activate-all' or 'deactivate-all'
+        
+        questions.forEach(q => {
+            q.active = action === 'activate-all';
+        });
+        saveDatabase();
+        
+        const activeCount = getActiveQuestions().length;
+        console.log(`🔄 Bulk ${action}: ${activeCount} active questions`);
+        
+        GAME_IDS.forEach(gameId => {
+            broadcastToGameAdmins(gameId, 'questions-updated', { questions, dbVersion: db.version });
+            broadcastToGameAdmins(gameId, 'admin-update', getAdminUpdate(gameId));
+        });
     });
     
     // Handle disconnect
@@ -606,7 +817,8 @@ server.listen(PORT, () => {
     console.log(`\n🏆 AFCON Trivia Server running!`);
     console.log(`\n📱 Player URL: http://localhost:${PORT}/?game=1`);
     console.log(`🎮 Admin Panel: http://localhost:${PORT}/admin`);
-    console.log(`📝 Questions loaded: ${questions.length}`);
+    console.log(`📝 Questions loaded: ${questions.length} (${getActiveQuestions().length} active)`);
     console.log(`🎯 Games available: ${GAME_IDS.join(', ')}`);
-    console.log(`\n✨ Ready for the games!\n`);
+    console.log(`💾 Database version: ${db.version}`);
+    console.log(`\n✨ Ready for 10K+ players!\n`);
 });
