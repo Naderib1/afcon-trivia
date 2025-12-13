@@ -1,6 +1,6 @@
-// AFCON Trivia - Player Client with i18n and Multi-Game Support
+// AFCON Trivia - Player Client with Speed Scoring & Sound Effects
 const socket = io({
-    transports: ['polling', 'websocket'],
+    transports: ['websocket', 'polling'],
     upgrade: true,
     rememberUpgrade: true,
     reconnection: true,
@@ -13,6 +13,47 @@ const socket = io({
 const urlParams = new URLSearchParams(window.location.search);
 const gameId = parseInt(urlParams.get('game')) || 1;
 console.log('🎮 Joining Game:', gameId);
+
+// Sound Effects
+const SoundManager = {
+    enabled: true,
+    sounds: {},
+    
+    init() {
+        // Create audio elements
+        this.sounds = {
+            tick: this.createSound('https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3'),
+            correct: this.createSound('https://assets.mixkit.co/active_storage/sfx/2000/2000-preview.mp3'),
+            wrong: this.createSound('https://assets.mixkit.co/active_storage/sfx/2955/2955-preview.mp3'),
+            countdown: this.createSound('https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3'),
+            winner: this.createSound('https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3'),
+            join: this.createSound('https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3')
+        };
+    },
+    
+    createSound(url) {
+        const audio = new Audio(url);
+        audio.volume = 0.4;
+        audio.preload = 'auto';
+        return audio;
+    },
+    
+    play(name) {
+        if (!this.enabled || !this.sounds[name]) return;
+        try {
+            this.sounds[name].currentTime = 0;
+            this.sounds[name].play().catch(() => {});
+        } catch (e) {}
+    },
+    
+    toggle() {
+        this.enabled = !this.enabled;
+        return this.enabled;
+    }
+};
+
+// Initialize sounds
+SoundManager.init();
 
 // Connection status
 socket.on('connect', () => {
@@ -46,7 +87,10 @@ const translations = {
         gameOver: "Game Over!",
         finalScore: "Your Final Score",
         topPlayers: "Top Players",
-        thanks: "Thanks for playing AFCON Trivia!"
+        thanks: "Thanks for playing AFCON Trivia!",
+        reconnected: "Welcome back!",
+        fast: "Lightning Fast!",
+        points: "points"
     },
     ar: {
         triviaTitle: "المسابقة",
@@ -65,7 +109,10 @@ const translations = {
         gameOver: "انتهت اللعبة!",
         finalScore: "مجموع نقاطك",
         topPlayers: "أفضل اللاعبين",
-        thanks: "شكراً للعب AFCON Trivia!"
+        thanks: "شكراً للعب AFCON Trivia!",
+        reconnected: "مرحباً بعودتك!",
+        fast: "سريع جداً!",
+        points: "نقاط"
     },
     fr: {
         triviaTitle: "QUIZ",
@@ -84,7 +131,10 @@ const translations = {
         gameOver: "Fin du Jeu!",
         finalScore: "Votre Score Final",
         topPlayers: "Meilleurs Joueurs",
-        thanks: "Merci d'avoir joué AFCON Trivia!"
+        thanks: "Merci d'avoir joué AFCON Trivia!",
+        reconnected: "Bienvenue!",
+        fast: "Ultra Rapide!",
+        points: "points"
     }
 };
 
@@ -134,7 +184,8 @@ let playerState = {
     score: 0,
     currentAnswer: null,
     hasAnswered: false,
-    photo: null
+    photo: null,
+    answerStartTime: null
 };
 
 // Apply translations
@@ -153,7 +204,6 @@ function applyTranslations() {
         }
     });
     
-    // Set RTL for Arabic
     if (currentLang === 'ar') {
         document.body.classList.add('rtl');
     } else {
@@ -177,7 +227,8 @@ function showScreen(screenName) {
 }
 
 // Update timer display
-function updateTimer(seconds, totalSeconds = 60) {
+let lastTimerValue = 30;
+function updateTimer(seconds, totalSeconds = 30) {
     elements.timerText.textContent = seconds;
     
     const circumference = 2 * Math.PI * 45;
@@ -185,11 +236,15 @@ function updateTimer(seconds, totalSeconds = 60) {
     elements.timerCircle.style.strokeDashoffset = offset;
     
     elements.timerCircle.classList.remove('warning', 'danger');
-    if (seconds <= 10) {
+    if (seconds <= 5) {
         elements.timerCircle.classList.add('danger');
-    } else if (seconds <= 20) {
+        if (seconds !== lastTimerValue && seconds > 0) {
+            SoundManager.play('countdown');
+        }
+    } else if (seconds <= 10) {
         elements.timerCircle.classList.add('warning');
     }
+    lastTimerValue = seconds;
 }
 
 // Create option buttons
@@ -208,6 +263,9 @@ function createOptions(options) {
         btn.addEventListener('click', () => selectAnswer(index));
         elements.optionsContainer.appendChild(btn);
     });
+    
+    // Record when question was shown for response time
+    playerState.answerStartTime = Date.now();
 }
 
 // Select answer
@@ -216,6 +274,8 @@ function selectAnswer(index) {
     
     playerState.currentAnswer = index;
     playerState.hasAnswered = true;
+    
+    const responseTime = Date.now() - playerState.answerStartTime;
     
     document.querySelectorAll('.option-btn').forEach((btn, i) => {
         btn.classList.remove('selected');
@@ -226,22 +286,38 @@ function selectAnswer(index) {
     });
     
     elements.answerStatus.classList.add('show');
+    
+    // Show speed indicator
+    if (responseTime < 3000) {
+        elements.answerStatus.innerHTML = `⚡ ${translations[currentLang].fast}`;
+    } else {
+        elements.answerStatus.innerHTML = `✓ ${translations[currentLang].answerLocked}`;
+    }
+    
+    SoundManager.play('tick');
     socket.emit('submit-answer', { answer: index });
 }
 
-// Show result with animation
-function showResult(isCorrect, explanation, newScore) {
+// Show result with animation and points
+function showResult(isCorrect, explanation, newScore, points, responseTime) {
     playerState.score = newScore;
     
     if (isCorrect) {
         elements.resultIcon.textContent = '🎉';
         elements.resultTitle.textContent = translations[currentLang].correct;
         elements.resultTitle.className = 'result-title correct';
+        
+        // Show points earned with speed indicator
+        const speedText = responseTime < 3000 ? '⚡' : responseTime < 7000 ? '🔥' : '';
+        elements.resultTitle.innerHTML = `${translations[currentLang].correct}<br><span class="points-earned">${speedText} +${points} ${translations[currentLang].points}</span>`;
+        
+        SoundManager.play('correct');
         createMiniConfetti();
     } else {
         elements.resultIcon.textContent = '😢';
         elements.resultTitle.textContent = translations[currentLang].wrong;
         elements.resultTitle.className = 'result-title wrong';
+        SoundManager.play('wrong');
     }
     
     elements.resultExplanation.textContent = explanation || '';
@@ -267,7 +343,6 @@ function createMiniConfetti() {
     const colors = ['#B22222', '#c93c3c', '#0EC76A', '#fbbf24', '#f59e0b', '#ffffff'];
     const emojis = ['⚽', '🌟', '✨', '🎉', '🏆'];
     
-    // Confetti pieces
     for (let i = 0; i < 40; i++) {
         setTimeout(() => {
             const piece = document.createElement('div');
@@ -283,7 +358,6 @@ function createMiniConfetti() {
         }, i * 40);
     }
     
-    // Emoji burst
     for (let i = 0; i < 8; i++) {
         setTimeout(() => {
             const emoji = document.createElement('div');
@@ -304,7 +378,8 @@ function createFullConfetti() {
     const colors = ['#B22222', '#c93c3c', '#8D0000', '#0EC76A', '#fbbf24', '#f59e0b', '#ffffff'];
     const emojis = ['🏆', '⚽', '🌟', '✨', '🎉', '🇲🇦', '🥇', '🎊', '👏'];
     
-    // Massive confetti burst
+    SoundManager.play('winner');
+    
     for (let i = 0; i < 120; i++) {
         setTimeout(() => {
             const piece = document.createElement('div');
@@ -321,7 +396,6 @@ function createFullConfetti() {
         }, i * 30);
     }
     
-    // Emoji rain
     for (let i = 0; i < 25; i++) {
         setTimeout(() => {
             const emoji = document.createElement('div');
@@ -337,7 +411,6 @@ function createFullConfetti() {
         }, i * 150);
     }
     
-    // Second wave
     setTimeout(() => {
         for (let i = 0; i < 60; i++) {
             setTimeout(() => {
@@ -377,6 +450,7 @@ function updateLeaderboard(leaderboard) {
             <span class="leader-rank">${medals[index] || (index + 1)}</span>
             <div class="leader-photo">${photoHtml}</div>
             <span class="leader-name">${player.name}</span>
+            ${player.avgTime ? `<span class="leader-time">⚡${player.avgTime}s</span>` : ''}
             <span class="leader-score">${player.score}</span>
         `;
         
@@ -397,12 +471,12 @@ document.querySelectorAll('.lang-btn').forEach(btn => {
     });
 });
 
-// Photo button click - trigger file input
+// Photo button click
 elements.photoBtn.addEventListener('click', () => {
     elements.photoInput.click();
 });
 
-// Compress image to reduce size
+// Compress image
 function compressImage(file, maxWidth = 150, quality = 0.6) {
     return new Promise((resolve) => {
         const reader = new FileReader();
@@ -413,7 +487,6 @@ function compressImage(file, maxWidth = 150, quality = 0.6) {
                 let width = img.width;
                 let height = img.height;
                 
-                // Calculate new dimensions
                 if (width > maxWidth) {
                     height = (height * maxWidth) / width;
                     width = maxWidth;
@@ -425,7 +498,6 @@ function compressImage(file, maxWidth = 150, quality = 0.6) {
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
                 
-                // Convert to compressed base64
                 const compressedData = canvas.toDataURL('image/jpeg', quality);
                 console.log('📷 Photo compressed:', Math.round(compressedData.length / 1024), 'KB');
                 resolve(compressedData);
@@ -436,24 +508,20 @@ function compressImage(file, maxWidth = 150, quality = 0.6) {
     });
 }
 
-// Photo input change - handle selected/captured photo
+// Photo input change
 elements.photoInput.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (file) {
         try {
-            // Compress the image before storing
             const compressedPhoto = await compressImage(file, 150, 0.6);
             playerState.photo = compressedPhoto;
             
-            // Update preview
             elements.photoPreview.innerHTML = `<img src="${compressedPhoto}" alt="Your photo">`;
             
-            // Update button text
             elements.photoBtn.innerHTML = `<span>✓</span><span>${translations[currentLang].addPhoto}</span>`;
             elements.photoBtn.style.background = 'linear-gradient(135deg, #0EC76A 0%, #0aa858 100%)';
         } catch (err) {
             console.error('Photo compression error:', err);
-            // Fallback: don't use photo
             playerState.photo = null;
         }
     }
@@ -469,13 +537,13 @@ elements.joinForm.addEventListener('submit', (e) => {
     playerState.name = name;
     elements.displayName.textContent = name;
     
-    // Update badge photo
     if (playerState.photo) {
         elements.badgePhoto.innerHTML = `<img src="${playerState.photo}" alt="${name}">`;
     } else {
         elements.badgePhoto.innerHTML = `<span>${name.charAt(0).toUpperCase()}</span>`;
     }
     
+    SoundManager.play('join');
     socket.emit('join-game', { name, lang: currentLang, photo: playerState.photo, gameId });
     showScreen('waiting');
 });
@@ -485,7 +553,16 @@ elements.joinForm.addEventListener('submit', (e) => {
 socket.on('game-state', (data) => {
     if (data.totalQuestions) {
         elements.qTotal.textContent = data.totalQuestions;
-        elements.maxPossibleScore.textContent = data.totalQuestions * 10;
+        elements.maxPossibleScore.textContent = data.totalQuestions * 20; // Max with speed bonus
+    }
+    
+    // Check for reconnection
+    if (data.reconnected) {
+        playerState.score = data.score || 0;
+        elements.waitingScore.textContent = playerState.score;
+        elements.gameScore.textContent = playerState.score;
+        // Show reconnection message
+        console.log('🔄 Reconnected with score:', playerState.score);
     }
     
     if (data.status === 'waiting') {
@@ -517,7 +594,7 @@ socket.on('new-question', (data) => {
     
     elements.qNumber.textContent = data.question.questionNumber;
     elements.qTotal.textContent = data.question.totalQuestions;
-    elements.maxPossibleScore.textContent = data.question.totalQuestions * 10;
+    elements.maxPossibleScore.textContent = data.question.totalQuestions * 20;
     elements.questionText.textContent = getLocalizedText(data.question.question);
     elements.gameScore.textContent = playerState.score;
     
@@ -542,21 +619,25 @@ socket.on('answer-reveal', (data) => {
 
 socket.on('your-result', (data) => {
     setTimeout(() => {
-        showResult(data.isCorrect, getLocalizedText(data.explanation), data.newScore);
+        showResult(
+            data.isCorrect, 
+            getLocalizedText(data.explanation), 
+            data.newScore,
+            data.points || 0,
+            data.responseTime || 30000
+        );
         elements.gameScore.textContent = data.newScore;
         elements.waitingScore.textContent = data.newScore;
     }, 1000);
 });
 
 socket.on('game-finished', (data) => {
-    // Update leaderboard first
     if (data.leaderboard) {
         updateLeaderboard(data.leaderboard);
     }
     if (data.totalQuestions) {
-        elements.maxPossibleScore.textContent = data.totalQuestions * 10;
+        elements.maxPossibleScore.textContent = data.totalQuestions * 20;
     }
-    // Show final screen after a short delay to let result show
     setTimeout(() => {
         elements.finalScore.textContent = playerState.score;
         createFullConfetti();
@@ -564,7 +645,6 @@ socket.on('game-finished', (data) => {
     }, 2000);
 });
 
-// Receive individual final score
 socket.on('your-final-score', (data) => {
     console.log('📊 Final score received:', data);
     playerState.score = data.score;

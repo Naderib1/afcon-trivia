@@ -122,6 +122,12 @@
                         <button class="btn-bulk btn-deactivate-all" id="btn-deactivate-all" title="Deactivate All">
                             ⬜ None
                         </button>
+                        <button class="btn-import" onclick="importQuestions()" title="Import Questions">
+                            📥 Import
+                        </button>
+                        <button class="btn-export" onclick="exportQuestions()" title="Export Questions">
+                            📤 Export
+                        </button>
                         <button class="btn-add-question" id="btn-add-question">
                             <span>➕</span>
                             <span>Add Question</span>
@@ -131,6 +137,17 @@
                 <p class="questions-hint">Toggle questions ON/OFF to select which ones to use. Auto-Play will cycle through all active questions automatically.</p>
                 <div class="questions-list" id="questions-list">
                     <!-- Questions will be loaded here -->
+                </div>
+            </section>
+
+            <section class="display-section">
+                <h2>📺 Stadium Display</h2>
+                <p class="display-hint">Open this on your big screen / projector for the audience</p>
+                <div class="display-links">
+                    <a href="/display?game=1" target="_blank" class="display-link">📺 Game 1 Display</a>
+                    <a href="/display?game=2" target="_blank" class="display-link">📺 Game 2 Display</a>
+                    <a href="/display?game=3" target="_blank" class="display-link">📺 Game 3 Display</a>
+                    <a href="/display?game=4" target="_blank" class="display-link">📺 Game 4 Display</a>
                 </div>
             </section>
 

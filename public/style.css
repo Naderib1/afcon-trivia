@@ -1104,6 +1104,32 @@ body.rtl .logo-header { flex-direction: row-reverse; }
     background-clip: text;
 }
 
+/* Speed time indicator in leaderboard */
+.leader-time {
+    font-size: 11px;
+    color: var(--gold);
+    font-weight: 600;
+    background: rgba(251, 191, 36, 0.15);
+    padding: 3px 8px;
+    border-radius: 10px;
+}
+
+/* Points earned display */
+.points-earned {
+    display: block;
+    font-size: 24px;
+    margin-top: 10px;
+    color: var(--gold);
+    -webkit-text-fill-color: var(--gold);
+    animation: pointsPop 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes pointsPop {
+    0% { transform: scale(0); }
+    60% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
 .thanks-message {
     margin-top: 18px;
     color: var(--text-muted);

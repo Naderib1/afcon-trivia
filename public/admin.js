@@ -605,11 +605,56 @@ async function downloadWinners() {
     alert('✅ Downloaded winners card!');
 }
 
+// Import/Export Questions
+function exportQuestions() {
+    window.open('/api/questions/export', '_blank');
+}
+
+function importQuestions() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        try {
+            const text = await file.text();
+            const questions = JSON.parse(text);
+            
+            const mode = confirm('How do you want to import?\n\nOK = Add to existing questions\nCancel = Replace all questions') 
+                ? 'merge' 
+                : 'replace';
+            
+            const response = await fetch(`/api/questions/import?mode=${mode}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(questions)
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                alert(`✅ Imported ${result.imported} questions!\nTotal: ${result.total}`);
+            } else {
+                alert('❌ Import failed: ' + result.error);
+            }
+        } catch (err) {
+            alert('❌ Invalid JSON file: ' + err.message);
+        }
+    };
+    
+    input.click();
+}
+
 // Make functions global for onclick handlers
 window.editQuestion = editQuestion;
 window.deleteQuestion = deleteQuestion;
 window.toggleQuestion = toggleQuestion;
 window.bulkToggle = bulkToggle;
+window.exportQuestions = exportQuestions;
+window.importQuestions = importQuestions;
 
 // Start Auto-Play
 function startAutoPlay() {

@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AFCON Trivia - Stadium Display</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Righteous&family=Poppins:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="icon" href="images/logo.png" type="image/png">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #1a0a0a 0%, #2d0a0a 50%, #1a0a0a 100%);
+            min-height: 100vh;
+            color: white;
+            overflow: hidden;
+        }
+
+        /* Animated Background */
+        .bg-pattern {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                radial-gradient(circle at 20% 80%, rgba(178, 34, 34, 0.3) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(255, 215, 0, 0.2) 0%, transparent 50%),
+                radial-gradient(circle at 50% 50%, rgba(178, 34, 34, 0.1) 0%, transparent 70%);
+            z-index: 0;
+            animation: bgPulse 10s ease-in-out infinite;
+        }
+
+        @keyframes bgPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 30px 50px;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 40px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 25px;
+            border: 2px solid rgba(255, 215, 0, 0.3);
+            margin-bottom: 30px;
+        }
+
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .logo-img {
+            width: 80px;
+            height: auto;
+            filter: drop-shadow(0 0 20px rgba(255, 215, 0, 0.5));
+        }
+
+        .logo-text h1 {
+            font-family: 'Righteous', cursive;
+            font-size: 42px;
+            background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(255, 215, 0, 0.3);
+        }
+
+        .logo-text span {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.7);
+            letter-spacing: 3px;
+            text-transform: uppercase;
+        }
+
+        .stats-bar {
+            display: flex;
+            gap: 30px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 15px 30px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.7);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .stat-value {
+            font-size: 36px;
+            font-weight: 800;
+            color: #FFD700;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            display: flex;
+            gap: 30px;
+        }
+
+        /* Question Area */
+        .question-area {
+            flex: 2;
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+        }
+
+        .question-card {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 30px;
+            padding: 50px;
+            border: 3px solid rgba(255, 215, 0, 0.4);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        .question-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .question-number {
+            font-size: 24px;
+            font-weight: 700;
+            color: #FFD700;
+            background: rgba(255, 215, 0, 0.2);
+            padding: 10px 25px;
+            border-radius: 50px;
+        }
+
+        .timer-display {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .timer-circle {
+            width: 100px;
+            height: 100px;
+            position: relative;
+        }
+
+        .timer-circle svg {
+            transform: rotate(-90deg);
+            width: 100px;
+            height: 100px;
+        }
+
+        .timer-circle circle {
+            fill: none;
+            stroke-width: 8;
+        }
+
+        .timer-bg {
+            stroke: rgba(255, 255, 255, 0.2);
+        }
+
+        .timer-progress {
+            stroke: #FFD700;
+            stroke-linecap: round;
+            stroke-dasharray: 283;
+            stroke-dashoffset: 0;
+            transition: stroke-dashoffset 1s linear, stroke 0.3s ease;
+        }
+
+        .timer-progress.warning {
+            stroke: #FFA500;
+        }
+
+        .timer-progress.danger {
+            stroke: #FF4444;
+            animation: timerPulse 0.5s ease-in-out infinite;
+        }
+
+        @keyframes timerPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .timer-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 36px;
+            font-weight: 900;
+            color: white;
+        }
+
+        .question-text {
+            font-size: 42px;
+            font-weight: 700;
+            line-height: 1.4;
+            text-align: center;
+            margin-bottom: 40px;
+            text-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .options-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .option-card {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 25px 30px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.4s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .option-card.correct {
+            background: linear-gradient(135deg, rgba(14, 199, 106, 0.4) 0%, rgba(14, 199, 106, 0.2) 100%);
+            border-color: #0EC76A;
+            animation: correctPulse 0.5s ease;
+        }
+
+        .option-card.wrong {
+            background: rgba(255, 68, 68, 0.2);
+            border-color: rgba(255, 68, 68, 0.5);
+        }
+
+        @keyframes correctPulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); }
+        }
+
+        .option-letter {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #B22222 0%, #8D0000 100%);
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            font-weight: 900;
+            flex-shrink: 0;
+        }
+
+        .option-text {
+            font-size: 24px;
+            font-weight: 600;
+            flex: 1;
+        }
+
+        .option-percent {
+            font-size: 28px;
+            font-weight: 900;
+            color: #FFD700;
+            min-width: 80px;
+            text-align: right;
+        }
+
+        .option-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 6px;
+            background: linear-gradient(90deg, #FFD700, #FFA500);
+            border-radius: 0 3px 0 0;
+            transition: width 0.5s ease;
+        }
+
+        /* Leaderboard */
+        .leaderboard-area {
+            flex: 1;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 30px;
+            padding: 30px;
+            border: 3px solid rgba(255, 215, 0, 0.4);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .leaderboard-title {
+            font-size: 28px;
+            font-weight: 800;
+            text-align: center;
+            margin-bottom: 25px;
+            color: #FFD700;
+        }
+
+        .leaderboard-list {
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .leader-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            margin-bottom: 10px;
+            transition: all 0.3s ease;
+            animation: slideIn 0.5s ease;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(50px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .leader-item:nth-child(1) {
+            background: linear-gradient(135deg, rgba(255, 215, 0, 0.3) 0%, rgba(255, 215, 0, 0.1) 100%);
+            border: 2px solid rgba(255, 215, 0, 0.5);
+        }
+
+        .leader-item:nth-child(2) {
+            background: linear-gradient(135deg, rgba(192, 192, 192, 0.2) 0%, rgba(192, 192, 192, 0.05) 100%);
+            border: 2px solid rgba(192, 192, 192, 0.3);
+        }
+
+        .leader-item:nth-child(3) {
+            background: linear-gradient(135deg, rgba(205, 127, 50, 0.2) 0%, rgba(205, 127, 50, 0.05) 100%);
+            border: 2px solid rgba(205, 127, 50, 0.3);
+        }
+
+        .leader-rank {
+            font-size: 28px;
+            width: 50px;
+            text-align: center;
+        }
+
+        .leader-photo {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #B22222 0%, #8D0000 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: 700;
+            overflow: hidden;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .leader-photo img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .leader-info {
+            flex: 1;
+        }
+
+        .leader-name {
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .leader-time {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .leader-score {
+            font-size: 28px;
+            font-weight: 900;
+            color: #FFD700;
+        }
+
+        /* Waiting Screen */
+        .waiting-screen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            text-align: center;
+        }
+
+        .waiting-screen.active {
+            display: flex;
+        }
+
+        .waiting-logo {
+            width: 200px;
+            margin-bottom: 40px;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+
+        .waiting-title {
+            font-family: 'Righteous', cursive;
+            font-size: 72px;
+            background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 20px;
+        }
+
+        .waiting-subtitle {
+            font-size: 32px;
+            color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 40px;
+        }
+
+        .waiting-players {
+            font-size: 48px;
+            font-weight: 800;
+            color: #FFD700;
+        }
+
+        .waiting-players span {
+            font-size: 24px;
+            color: rgba(255, 255, 255, 0.6);
+            display: block;
+            margin-top: 10px;
+        }
+
+        .scan-prompt {
+            margin-top: 50px;
+            padding: 30px 50px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            border: 2px solid rgba(255, 215, 0, 0.3);
+        }
+
+        .scan-prompt p {
+            font-size: 24px;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        /* Game Content */
+        .game-content {
+            display: none;
+            flex: 1;
+        }
+
+        .game-content.active {
+            display: flex;
+        }
+
+        /* Answer Reveal */
+        .answer-stats {
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+        }
+
+        .answer-stats.show {
+            display: block;
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .stats-title {
+            font-size: 18px;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        /* Finished Screen */
+        .finished-screen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            text-align: center;
+        }
+
+        .finished-screen.active {
+            display: flex;
+        }
+
+        .winners-podium {
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 50px;
+        }
+
+        .podium-place {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            animation: riseUp 1s ease;
+        }
+
+        @keyframes riseUp {
+            from { transform: translateY(100px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .podium-place:nth-child(1) { animation-delay: 0.3s; }
+        .podium-place:nth-child(2) { animation-delay: 0s; }
+        .podium-place:nth-child(3) { animation-delay: 0.6s; }
+
+        .podium-photo {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #B22222 0%, #8D0000 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            font-weight: 800;
+            margin-bottom: 15px;
+            border: 5px solid #FFD700;
+            overflow: hidden;
+        }
+
+        .podium-photo img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .first-place .podium-photo {
+            width: 150px;
+            height: 150px;
+            border-width: 8px;
+            box-shadow: 0 0 50px rgba(255, 215, 0, 0.5);
+        }
+
+        .podium-medal {
+            font-size: 60px;
+            margin-bottom: 10px;
+        }
+
+        .first-place .podium-medal {
+            font-size: 80px;
+        }
+
+        .podium-name {
+            font-size: 24px;
+            font-weight: 800;
+            margin-bottom: 5px;
+        }
+
+        .first-place .podium-name {
+            font-size: 32px;
+        }
+
+        .podium-score {
+            font-size: 20px;
+            color: #FFD700;
+            font-weight: 700;
+        }
+
+        .first-place .podium-score {
+            font-size: 28px;
+        }
+
+        .podium-block {
+            width: 150px;
+            margin-top: 20px;
+            border-radius: 10px 10px 0 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            font-weight: 900;
+            color: rgba(0, 0, 0, 0.5);
+        }
+
+        .first-place .podium-block {
+            height: 150px;
+            background: linear-gradient(180deg, #FFD700 0%, #FFA500 100%);
+            width: 180px;
+        }
+
+        .podium-place:nth-child(1) .podium-block {
+            height: 100px;
+            background: linear-gradient(180deg, #C0C0C0 0%, #A0A0A0 100%);
+        }
+
+        .podium-place:nth-child(3) .podium-block {
+            height: 70px;
+            background: linear-gradient(180deg, #CD7F32 0%, #8B4513 100%);
+        }
+
+        .confetti-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 100;
+            overflow: hidden;
+        }
+
+        .confetti {
+            position: absolute;
+            top: -20px;
+            animation: confettiFall 4s ease-in-out forwards;
+        }
+
+        @keyframes confettiFall {
+            0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+        }
+
+        /* Hidden class */
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-pattern"></div>
+    
+    <div class="container">
+        <header class="header">
+            <div class="logo-section">
+                <img src="images/logo.png" alt="AFCON" class="logo-img">
+                <div class="logo-text">
+                    <h1>AFCON TRIVIA</h1>
+                    <span>Morocco 2025</span>
+                </div>
+            </div>
+            <div class="stats-bar">
+                <div class="stat-item">
+                    <div class="stat-label">Players</div>
+                    <div class="stat-value" id="player-count">0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Question</div>
+                    <div class="stat-value"><span id="current-q">0</span>/<span id="total-q">10</span></div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Answered</div>
+                    <div class="stat-value" id="answered-count">0</div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Waiting Screen -->
+        <div class="waiting-screen active" id="waiting-screen">
+            <img src="images/logo.png" alt="AFCON" class="waiting-logo">
+            <h1 class="waiting-title">AFCON TRIVIA</h1>
+            <p class="waiting-subtitle">Get Ready to Test Your Football Knowledge!</p>
+            <div class="waiting-players">
+                <span id="waiting-player-count">0</span>
+                <span>Players Connected</span>
+            </div>
+            <div class="scan-prompt">
+                <p>📱 Scan the QR code to join!</p>
+            </div>
+        </div>
+
+        <!-- Game Content -->
+        <div class="game-content" id="game-content">
+            <div class="main-content">
+                <div class="question-area">
+                    <div class="question-card">
+                        <div class="question-header">
+                            <div class="question-number">Question <span id="q-number">1</span></div>
+                            <div class="timer-display">
+                                <div class="timer-circle">
+                                    <svg>
+                                        <circle class="timer-bg" cx="50" cy="50" r="45"></circle>
+                                        <circle class="timer-progress" id="timer-progress" cx="50" cy="50" r="45"></circle>
+                                    </svg>
+                                    <div class="timer-text" id="timer-text">30</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="question-text" id="question-text">Loading question...</div>
+                        <div class="options-grid" id="options-grid">
+                            <!-- Options will be inserted here -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="leaderboard-area">
+                    <h2 class="leaderboard-title">🏆 LEADERBOARD</h2>
+                    <div class="leaderboard-list" id="leaderboard-list">
+                        <!-- Leaderboard items will be inserted here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Finished Screen -->
+        <div class="finished-screen" id="finished-screen">
+            <h1 class="waiting-title">🎉 GAME OVER!</h1>
+            <div class="winners-podium" id="winners-podium">
+                <!-- Winners will be inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <div class="confetti-container" id="confetti-container"></div>
+
+    <!-- Audio Elements -->
+    <audio id="sound-tick" preload="auto">
+        <source src="https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="sound-correct" preload="auto">
+        <source src="https://assets.mixkit.co/active_storage/sfx/2018/2018-preview.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="sound-wrong" preload="auto">
+        <source src="https://assets.mixkit.co/active_storage/sfx/2955/2955-preview.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="sound-countdown" preload="auto">
+        <source src="https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="sound-winner" preload="auto">
+        <source src="https://assets.mixkit.co/active_storage/sfx/2020/2020-preview.mp3" type="audio/mpeg">
+    </audio>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        // Get game ID from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const gameId = parseInt(urlParams.get('game')) || 1;
+
+        // Socket connection
+        const socket = io({
+            transports: ['websocket', 'polling'],
+            reconnection: true,
+            reconnectionAttempts: 10
+        });
+
+        // Sound effects
+        const sounds = {
+            tick: document.getElementById('sound-tick'),
+            correct: document.getElementById('sound-correct'),
+            wrong: document.getElementById('sound-wrong'),
+            countdown: document.getElementById('sound-countdown'),
+            winner: document.getElementById('sound-winner')
+        };
+
+        // Set volumes
+        Object.values(sounds).forEach(s => { if(s) s.volume = 0.5; });
+
+        function playSound(name) {
+            try {
+                const sound = sounds[name];
+                if (sound) {
+                    sound.currentTime = 0;
+                    sound.play().catch(() => {});
+                }
+            } catch (e) {}
+        }
+
+        // DOM Elements
+        const screens = {
+            waiting: document.getElementById('waiting-screen'),
+            game: document.getElementById('game-content'),
+            finished: document.getElementById('finished-screen')
+        };
+
+        const elements = {
+            playerCount: document.getElementById('player-count'),
+            waitingPlayerCount: document.getElementById('waiting-player-count'),
+            currentQ: document.getElementById('current-q'),
+            totalQ: document.getElementById('total-q'),
+            answeredCount: document.getElementById('answered-count'),
+            qNumber: document.getElementById('q-number'),
+            timerProgress: document.getElementById('timer-progress'),
+            timerText: document.getElementById('timer-text'),
+            questionText: document.getElementById('question-text'),
+            optionsGrid: document.getElementById('options-grid'),
+            leaderboardList: document.getElementById('leaderboard-list'),
+            winnersPodium: document.getElementById('winners-podium'),
+            confettiContainer: document.getElementById('confetti-container')
+        };
+
+        // State
+        let currentState = {
+            questionDuration: 30,
+            lastTickSound: 0
+        };
+
+        // Show screen
+        function showScreen(screenName) {
+            Object.values(screens).forEach(s => s.classList.remove('active'));
+            if (screens[screenName]) {
+                screens[screenName].classList.add('active');
+            }
+        }
+
+        // Update timer
+        function updateTimer(seconds, total = 30) {
+            elements.timerText.textContent = seconds;
+            
+            const circumference = 2 * Math.PI * 45;
+            const offset = circumference * (1 - seconds / total);
+            elements.timerProgress.style.strokeDashoffset = offset;
+            
+            elements.timerProgress.classList.remove('warning', 'danger');
+            if (seconds <= 5) {
+                elements.timerProgress.classList.add('danger');
+                if (seconds !== currentState.lastTickSound && seconds > 0) {
+                    playSound('countdown');
+                    currentState.lastTickSound = seconds;
+                }
+            } else if (seconds <= 10) {
+                elements.timerProgress.classList.add('warning');
+            }
+        }
+
+        // Update leaderboard
+        function updateLeaderboard(leaderboard) {
+            if (!leaderboard || leaderboard.length === 0) {
+                elements.leaderboardList.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.5);padding:30px;">Waiting for players...</div>';
+                return;
+            }
+
+            const medals = ['🥇', '🥈', '🥉'];
+            
+            elements.leaderboardList.innerHTML = leaderboard.slice(0, 8).map((player, index) => {
+                const photoHtml = player.photo 
+                    ? `<img src="${player.photo}" alt="${player.name}">`
+                    : player.name.charAt(0).toUpperCase();
+                
+                const timeHtml = player.avgTime ? `<div class="leader-time">⚡ ${player.avgTime}s avg</div>` : '';
+                
+                return `
+                    <div class="leader-item" style="animation-delay: ${index * 0.1}s">
+                        <div class="leader-rank">${medals[index] || (index + 1)}</div>
+                        <div class="leader-photo">${photoHtml}</div>
+                        <div class="leader-info">
+                            <div class="leader-name">${player.name}</div>
+                            ${timeHtml}
+                        </div>
+                        <div class="leader-score">${player.score}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Create options
+        function createOptions(options, answerStats = null, correctAnswer = null) {
+            const letters = ['A', 'B', 'C', 'D'];
+            
+            elements.optionsGrid.innerHTML = options.map((option, index) => {
+                let classes = 'option-card';
+                let percentHtml = '';
+                let barHtml = '';
+                
+                if (answerStats) {
+                    const percent = answerStats.percentages[index] || 0;
+                    percentHtml = `<div class="option-percent">${percent}%</div>`;
+                    barHtml = `<div class="option-bar" style="width: ${percent}%"></div>`;
+                    
+                    if (correctAnswer !== null) {
+                        if (index === correctAnswer) {
+                            classes += ' correct';
+                        } else if (percent > 0) {
+                            classes += ' wrong';
+                        }
+                    }
+                }
+                
+                return `
+                    <div class="${classes}">
+                        <div class="option-letter">${letters[index]}</div>
+                        <div class="option-text">${option}</div>
+                        ${percentHtml}
+                        ${barHtml}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Show winners
+        function showWinners(leaderboard) {
+            const top3 = leaderboard.slice(0, 3);
+            const medals = ['🥈', '🥇', '🥉'];
+            const order = [1, 0, 2]; // 2nd, 1st, 3rd
+            
+            let html = '';
+            
+            order.forEach((rankIndex, displayIndex) => {
+                if (rankIndex >= top3.length) return;
+                
+                const player = top3[rankIndex];
+                const isFirst = rankIndex === 0;
+                const photoHtml = player.photo 
+                    ? `<img src="${player.photo}" alt="${player.name}">`
+                    : player.name.charAt(0).toUpperCase();
+                
+                html += `
+                    <div class="podium-place ${isFirst ? 'first-place' : ''}" style="animation-delay: ${displayIndex * 0.3}s">
+                        <div class="podium-medal">${medals[displayIndex]}</div>
+                        <div class="podium-photo">${photoHtml}</div>
+                        <div class="podium-name">${player.name}</div>
+                        <div class="podium-score">${player.score} pts</div>
+                        <div class="podium-block">${rankIndex + 1}</div>
+                    </div>
+                `;
+            });
+            
+            elements.winnersPodium.innerHTML = html;
+            createConfetti();
+            playSound('winner');
+        }
+
+        // Create confetti
+        function createConfetti() {
+            const colors = ['#FFD700', '#B22222', '#0EC76A', '#FFFFFF', '#FFA500'];
+            const emojis = ['⚽', '🏆', '🌟', '✨', '🎉', '🇲🇦'];
+            
+            for (let i = 0; i < 100; i++) {
+                setTimeout(() => {
+                    const confetti = document.createElement('div');
+                    confetti.className = 'confetti';
+                    confetti.style.left = Math.random() * 100 + '%';
+                    confetti.style.animationDuration = (3 + Math.random() * 2) + 's';
+                    
+                    if (Math.random() > 0.7) {
+                        confetti.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+                        confetti.style.fontSize = (20 + Math.random() * 20) + 'px';
+                    } else {
+                        confetti.style.width = (8 + Math.random() * 8) + 'px';
+                        confetti.style.height = (8 + Math.random() * 8) + 'px';
+                        confetti.style.background = colors[Math.floor(Math.random() * colors.length)];
+                        confetti.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
+                    }
+                    
+                    elements.confettiContainer.appendChild(confetti);
+                    setTimeout(() => confetti.remove(), 4000);
+                }, i * 50);
+            }
+        }
+
+        // Socket Events
+        socket.on('connect', () => {
+            console.log('📺 Display connected to Game', gameId);
+            socket.emit('display-connect', { gameId });
+        });
+
+        socket.on('display-state', (data) => {
+            elements.playerCount.textContent = data.playerCount;
+            elements.waitingPlayerCount.textContent = data.playerCount;
+            elements.totalQ.textContent = data.totalQuestions;
+            
+            if (data.status === 'waiting') {
+                showScreen('waiting');
+            } else if (data.status === 'finished') {
+                showScreen('finished');
+                if (data.leaderboard) {
+                    showWinners(data.leaderboard);
+                }
+            } else if (data.question) {
+                showScreen('game');
+                elements.currentQ.textContent = data.currentQuestion + 1;
+                elements.qNumber.textContent = data.currentQuestion + 1;
+                elements.questionText.textContent = getLocalizedText(data.question.question);
+                createOptions(data.question.options, data.answerStats);
+                updateTimer(data.timeRemaining, 30);
+                updateLeaderboard(data.leaderboard);
+            }
+        });
+
+        socket.on('game-started', (data) => {
+            showScreen('waiting');
+            if (data) {
+                elements.playerCount.textContent = data.playerCount || 0;
+                elements.waitingPlayerCount.textContent = data.playerCount || 0;
+                elements.totalQ.textContent = data.totalQuestions || 10;
+            }
+        });
+
+        socket.on('new-question', (data) => {
+            showScreen('game');
+            currentState.lastTickSound = 0;
+            elements.answeredCount.textContent = '0';
+            
+            elements.currentQ.textContent = data.question.questionNumber;
+            elements.qNumber.textContent = data.question.questionNumber;
+            elements.questionText.textContent = getLocalizedText(data.question.question);
+            createOptions(data.question.options);
+            updateTimer(data.timeRemaining, 30);
+            
+            playSound('tick');
+        });
+
+        socket.on('timer', (data) => {
+            updateTimer(data.timeRemaining, 30);
+        });
+
+        socket.on('answer-stats-update', (data) => {
+            elements.answeredCount.textContent = data.answeredCount;
+        });
+
+        socket.on('answer-reveal', (data) => {
+            playSound('correct');
+            createOptions(data.question.options, data.answerStats, data.correctAnswer);
+            updateLeaderboard(data.leaderboard);
+        });
+
+        socket.on('player-count', (data) => {
+            elements.playerCount.textContent = data.playerCount;
+            elements.waitingPlayerCount.textContent = data.playerCount;
+        });
+
+        socket.on('game-finished', (data) => {
+            showScreen('finished');
+            if (data.leaderboard) {
+                showWinners(data.leaderboard);
+            }
+        });
+
+        socket.on('game-reset', () => {
+            showScreen('waiting');
+            elements.confettiContainer.innerHTML = '';
+        });
+
+        // Helper
+        function getLocalizedText(textObj) {
+            if (typeof textObj === 'string') return textObj;
+            if (textObj && typeof textObj === 'object') {
+                return textObj.en || textObj.ar || textObj.fr || '';
+            }
+            return '';
+        }
+
+        // Start
+        showScreen('waiting');
+    </script>
+</body>
+</html>
